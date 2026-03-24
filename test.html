@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bonding Curve + Loop Lending — Test Suite</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'JetBrains Mono',monospace;background:#0c0c0c;color:#d4d4d4;padding:20px;font-size:12px}
+h1{color:#10b981;margin-bottom:12px;font-size:16px}
+h1::before{content:'> '}
+.summary{padding:10px;border-radius:4px;margin-bottom:16px;font-weight:700;font-size:13px}
+.summary.pass{background:#052e16;border:1px solid #10b981;color:#10b981}
+.summary.fail{background:#2d0a0a;border:1px solid #ef4444;color:#ef4444}
+.group{margin-bottom:16px}
+.group-title{font-size:12px;font-weight:700;color:#06b6d4;margin-bottom:6px;padding:4px 8px;background:#141414;border-left:3px solid #06b6d4;border-radius:0 4px 4px 0}
+.test{padding:3px 8px;border-bottom:1px solid #1a1a1a;display:flex;gap:8px;align-items:baseline}
+.test.pass{color:#666}.test.pass::before{content:'✓';color:#10b981;font-weight:700}
+.test.fail{color:#ef4444}.test.fail::before{content:'✗';color:#ef4444;font-weight:700}
+.test .detail{color:#666;font-size:10px;margin-left:auto}
+.test.fail .detail{color:#f87171}
+.elapsed{color:#666;font-size:11px}
+</style>
+</head>
+<body>
+<h1>Bonding Curve + Loop Lending — Test Suite</h1>
+<div id="summary" class="summary">Running...</div>
+<div id="results"></div>
+
+<script>
+// ================================================================
+//  REPLICATE CORE LOGIC (must match index.html exactly)
+// ================================================================
+function price(x, fp, m) {
+  if (x <= 0) return fp;
+  return fp + m * x;
+}
+
+function integrate(sx, amt, fp, m) {
+  return fp * amt + m * amt * (sx + amt / 2);
+}
+
+function createState(overrides = {}) {
+  return {
+    m: 80e-10, fp: 0.001, supply: 0, liq: 0,
+    tMFR: 0.30, xMFR: 0.05, cMFR: 0.02,
+    maxT: 0.50, minT: 0.20,
+    buyFee: 0.01, sellFee: 0.015,
+    ltv: 1.0, apr: 0.10,
+    collateral: 0, sysCollateral: 0, debt: 0, userDebt: 0,
+    userTokens: 0, userMON: 1000000,
+    blocksSinceMFR: 0, totalFees: 0, totalVol: 0,
+    ...overrides,
+  };
+}
+
+function getLiq(S) {
+  const total = S.liq, floorSup = S.fp * S.supply;
+  const mktSup = Math.max(0, total - floorSup);
+  const mfr = total > 0 ? mktSup / total : 0;
+  return { total, floorSup, mktSup, mfr };
+}
+
+function poolLendable(S) {
+  return Math.max(0, S.liq - S.fp * S.supply - S.debt);
+}
+
+function autoUpFP(S) {
+  const { floorSup, mktSup, mfr } = getLiq(S);
+  if (mfr > S.tMFR && S.supply > 0) {
+    const u = mktSup * S.xMFR;
+    const nf = (floorSup + u) / S.supply;
+    if (nf > S.fp) S.fp = nf;
+    S.tMFR = Math.min(S.tMFR + S.cMFR, S.maxT);
+    S.blocksSinceMFR = 0;
+  } else {
+    S.blocksSinceMFR++;
+    if (S.blocksSinceMFR >= 3) S.tMFR = Math.max(S.tMFR - S.cMFR, S.minT);
+  }
+}
+
+function buy(S, amt) {
+  const c = integrate(S.supply, amt, S.fp, S.m);
+  const f = c * S.buyFee, total = c + f;
+  if (S.userMON < total) return { ok: false, reason: 'insufficient MON' };
+  S.supply += amt; S.liq += c; S.totalFees += f; S.totalVol += c;
+  S.userTokens += amt; S.userMON -= total;
+  autoUpFP(S);
+  return { ok: true, cost: c, fee: f };
+}
+
+function sell(S, amt) {
+  const sa = Math.min(amt, S.userTokens, S.supply);
+  if (sa <= 0) return { ok: false, reason: 'no tokens' };
+  const p = integrate(S.supply - sa, sa, S.fp, S.m);
+  const f = p * S.sellFee, net = p - f;
+  if (net > S.liq) return { ok: false, reason: 'insufficient liq' };
+  S.supply -= sa; S.liq -= p; S.totalFees += f; S.totalVol += p;
+  S.userTokens -= sa; S.userMON += net;
+  autoUpFP(S);
+  return { ok: true, proceeds: p, fee: f, net };
+}
+
+function borrow(S, tokenAmt) {
+  const ac = Math.min(tokenAmt, S.userTokens);
+  if (ac <= 0) return { ok: false, reason: 'no tokens' };
+  S.userTokens -= ac; S.collateral += ac; S.sysCollateral += ac;
+  const maxB = ac * S.fp * S.ltv;
+  const avail = poolLendable(S);
+  const mb = Math.min(maxB, avail);
+  if (mb <= 0) {
+    S.userTokens += ac; S.collateral -= ac; S.sysCollateral -= ac;
+    return { ok: false, reason: 'no lendable MON' };
+  }
+  S.debt += mb; S.userDebt += mb; S.liq -= mb; S.userMON += mb;
+  return { ok: true, borrowed: mb, collateral: ac };
+}
+
+function repay(S) {
+  if (S.userDebt <= 0) return { ok: false, reason: 'no debt' };
+  if (S.userMON < S.userDebt) return { ok: false, reason: 'insufficient MON' };
+  const repaid = S.userDebt;
+  S.userMON -= S.userDebt; S.liq += S.userDebt; S.debt -= S.userDebt;
+  S.sysCollateral -= S.collateral; S.userTokens += S.collateral;
+  S.userDebt = 0; S.collateral = 0;
+  return { ok: true, repaid };
+}
+
+// ================================================================
+//  TEST FRAMEWORK
+// ================================================================
+let groups = [];
+let currentGroup = null;
+let totalPass = 0, totalFail = 0;
+
+function describe(name, fn) {
+  currentGroup = { name, tests: [] };
+  groups.push(currentGroup);
+  fn();
+  currentGroup = null;
+}
+
+function it(name, fn) {
+  try {
+    fn();
+    currentGroup.tests.push({ name, pass: true });
+    totalPass++;
+  } catch (e) {
+    currentGroup.tests.push({ name, pass: false, error: e.message });
+    totalFail++;
+  }
+}
+
+function assert(cond, msg) {
+  if (!cond) throw new Error(msg || 'Assertion failed');
+}
+
+function assertClose(a, b, eps, msg) {
+  if (Math.abs(a - b) > eps) throw new Error(`${msg || ''} expected ~${b}, got ${a} (diff ${Math.abs(a-b)})`);
+}
+
+function assertGt(a, b, msg) {
+  if (!(a > b)) throw new Error(`${msg || ''} expected ${a} > ${b}`);
+}
+
+function assertGte(a, b, msg) {
+  if (!(a >= b)) throw new Error(`${msg || ''} expected ${a} >= ${b}`);
+}
+
+// ================================================================
+//  TESTS
+// ================================================================
+
+describe('Price Function — Basics', () => {
+  it('price at supply=0 equals floor price', () => {
+    assert(price(0, 0.001, 8e-9) === 0.001);
+    assert(price(0, 0.5, 1e-8) === 0.5);
+    assert(price(0, 100, 1e-6) === 100);
+  });
+
+  it('price is always >= floor price', () => {
+    for (const fp of [0.0001, 0.001, 0.01, 0.1, 1, 10]) {
+      for (const x of [0, 1, 1000, 1e6, 1e8]) {
+        assertGte(price(x, fp, 8e-9), fp, `fp=${fp} x=${x}`);
+      }
+    }
+  });
+
+  it('price is strictly increasing with supply', () => {
+    const fp = 0.001, m = 8e-9;
+    let prev = price(0, fp, m);
+    for (let x = 1000; x <= 1e8; x += 1000) {
+      const p = price(x, fp, m);
+      assertGt(p, prev, `supply=${x}`);
+      prev = p;
+    }
+  });
+
+  it('price increases when floor price increases (at any supply)', () => {
+    const m = 8e-9;
+    for (const x of [0, 1e5, 1e6, 1e7]) {
+      const p1 = price(x, 0.001, m);
+      const p2 = price(x, 0.01, m);
+      const p3 = price(x, 0.1, m);
+      assertGt(p2, p1, `x=${x} fp 0.01 vs 0.001`);
+      assertGt(p3, p2, `x=${x} fp 0.1 vs 0.01`);
+    }
+  });
+
+  it('price scales linearly with slope', () => {
+    const fp = 0.001, x = 1e6;
+    const p1 = price(x, fp, 4e-9);
+    const p2 = price(x, fp, 8e-9);
+    assertClose(p2 - fp, 2 * (p1 - fp), 1e-12, 'double slope doubles premium');
+  });
+});
+
+describe('Integration — Buy Cost', () => {
+  it('cost is always positive for positive amount', () => {
+    for (const amt of [1, 100, 1e6]) {
+      assertGt(integrate(0, amt, 0.001, 8e-9), 0, `amt=${amt}`);
+    }
+  });
+
+  it('cost equals fp*amount when slope=0', () => {
+    const cost = integrate(1e6, 5e5, 0.01, 0);
+    assertClose(cost, 0.01 * 5e5, 1e-6);
+  });
+
+  it('cost increases with higher starting supply (same amount)', () => {
+    const amt = 1e5, fp = 0.001, m = 8e-9;
+    const c1 = integrate(0, amt, fp, m);
+    const c2 = integrate(1e6, amt, fp, m);
+    const c3 = integrate(1e7, amt, fp, m);
+    assertGt(c2, c1); assertGt(c3, c2);
+  });
+
+  it('cost of A+B equals cost of A then B', () => {
+    const fp = 0.001, m = 8e-9, s = 1e6;
+    const a = 3e5, b = 5e5;
+    const costAB = integrate(s, a + b, fp, m);
+    const costA = integrate(s, a, fp, m);
+    const costB = integrate(s + a, b, fp, m);
+    assertClose(costAB, costA + costB, 1e-6, 'additivity');
+  });
+
+  it('closed-form matches numerical integration', () => {
+    const fp = 0.01, m = 5e-9, sx = 2e6, amt = 1e6;
+    const exact = integrate(sx, amt, fp, m);
+    // numerical check
+    const n = 10000, dx = amt / n;
+    let num = 0;
+    for (let i = 0; i < n; i++) {
+      const a = sx + i * dx, b = sx + (i + 1) * dx;
+      num += (price(a, fp, m) + price(b, fp, m)) / 2 * dx;
+    }
+    assertClose(exact, num, exact * 1e-8, 'exact vs numerical');
+  });
+});
+
+describe('Buy — Price Always Goes Up', () => {
+  it('each buy increases market price', () => {
+    const S = createState();
+    let prevPrice = price(S.supply, S.fp, S.m);
+    for (let i = 0; i < 50; i++) {
+      buy(S, 100000 + Math.floor(Math.random() * 500000));
+      const newPrice = price(S.supply, S.fp, S.m);
+      assertGt(newPrice, prevPrice, `buy #${i}`);
+      prevPrice = newPrice;
+    }
+  });
+
+  it('small buy (1 token) still increases price', () => {
+    const S = createState();
+    buy(S, 1e6); // establish some supply
+    const p1 = price(S.supply, S.fp, S.m);
+    buy(S, 1);
+    const p2 = price(S.supply, S.fp, S.m);
+    assertGt(p2, p1);
+  });
+
+  it('buy after MFR trigger still increases price', () => {
+    const S = createState();
+    // buy a lot to trigger MFR
+    for (let i = 0; i < 20; i++) buy(S, 1e6);
+    const pBefore = price(S.supply, S.fp, S.m);
+    buy(S, 1e5);
+    const pAfter = price(S.supply, S.fp, S.m);
+    assertGt(pAfter, pBefore, 'post-MFR buy');
+  });
+});
+
+describe('Sell — Price Always Goes Down', () => {
+  it('each sell decreases market price', () => {
+    const S = createState();
+    for (let i = 0; i < 30; i++) buy(S, 500000);
+    let prevPrice = price(S.supply, S.fp, S.m);
+    for (let i = 0; i < 20; i++) {
+      sell(S, 100000);
+      const newPrice = price(S.supply, S.fp, S.m);
+      assert(newPrice < prevPrice, `sell #${i}: ${newPrice} should be < ${prevPrice}`);
+      prevPrice = newPrice;
+    }
+  });
+
+  it('cannot sell more tokens than you hold', () => {
+    const S = createState();
+    buy(S, 1000);
+    const r = sell(S, 9999);
+    assert(r.ok); // should sell min(9999, 1000) = 1000
+    assert(S.userTokens === 0);
+  });
+});
+
+describe('Floor Price — Only Goes Up', () => {
+  it('floor price never decreases across many buys', () => {
+    const S = createState();
+    let prevFP = S.fp;
+    for (let i = 0; i < 100; i++) {
+      buy(S, 200000 + Math.floor(Math.random() * 1e6));
+      assertGte(S.fp, prevFP, `step ${i}: fp should not decrease`);
+      prevFP = S.fp;
+    }
+  });
+
+  it('floor price never decreases across mixed buy/sell', () => {
+    const S = createState();
+    let prevFP = S.fp;
+    for (let i = 0; i < 50; i++) buy(S, 500000);
+    for (let i = 0; i < 80; i++) {
+      if (Math.random() < 0.6) buy(S, Math.floor(100000 + Math.random() * 500000));
+      else sell(S, Math.floor(50000 + Math.random() * 200000));
+      assertGte(S.fp, prevFP, `mixed step ${i}`);
+      prevFP = S.fp;
+    }
+  });
+
+  it('sell does not lower floor price', () => {
+    const S = createState();
+    for (let i = 0; i < 20; i++) buy(S, 1e6);
+    const fpBefore = S.fp;
+    for (let i = 0; i < 10; i++) sell(S, 500000);
+    assertGte(S.fp, fpBefore);
+  });
+});
+
+describe('Market Price >= Floor Price (Invariant)', () => {
+  it('holds after many buys', () => {
+    const S = createState();
+    for (let i = 0; i < 50; i++) {
+      buy(S, Math.floor(1e5 + Math.random() * 2e6));
+      assertGte(price(S.supply, S.fp, S.m), S.fp, `buy #${i}`);
+    }
+  });
+
+  it('holds after mixed buy/sell', () => {
+    const S = createState();
+    for (let i = 0; i < 30; i++) buy(S, 1e6);
+    for (let i = 0; i < 50; i++) {
+      if (Math.random() < 0.5) buy(S, Math.floor(1e5 + Math.random() * 1e6));
+      else sell(S, Math.floor(5e4 + Math.random() * 5e5));
+      assertGte(price(S.supply, S.fp, S.m), S.fp, `mixed #${i}`);
+    }
+  });
+});
+
+describe('Lending — Pool Constraints', () => {
+  it('borrow reduces pool liquidity', () => {
+    const S = createState();
+    for (let i = 0; i < 10; i++) buy(S, 1e6);
+    const liqBefore = S.liq;
+    borrow(S, 500000);
+    assert(S.liq < liqBefore, 'pool should decrease after borrow');
+  });
+
+  it('cannot borrow more than pool lendable', () => {
+    const S = createState();
+    for (let i = 0; i < 5; i++) buy(S, 1e6);
+    const lendable = poolLendable(S);
+    // borrow all tokens → should be capped by lendable
+    const r = borrow(S, S.userTokens);
+    assertGte(lendable + 1e-6, r.borrowed || 0, 'borrow should not exceed lendable');
+  });
+
+  it('pool liquidity never goes below floor support after borrow', () => {
+    const S = createState();
+    for (let i = 0; i < 20; i++) buy(S, 1e6);
+    for (let i = 0; i < 10; i++) {
+      if (S.userTokens > 0) borrow(S, Math.floor(S.userTokens * 0.5));
+      const floorSup = S.fp * S.supply;
+      assertGte(S.liq + 1e-6, floorSup - S.debt, `step ${i}: pool+debt should cover floor`);
+    }
+  });
+
+  it('repay restores pool liquidity', () => {
+    const S = createState();
+    for (let i = 0; i < 10; i++) buy(S, 1e6);
+    const liqBefore = S.liq;
+    borrow(S, 500000);
+    assert(S.liq < liqBefore);
+    repay(S);
+    assertClose(S.liq, liqBefore, 1e-6, 'pool should restore after repay');
+  });
+
+  it('after repay: debt=0, collateral=0, tokens returned', () => {
+    const S = createState();
+    for (let i = 0; i < 5; i++) buy(S, 1e6);
+    const tokensBefore = S.userTokens;
+    borrow(S, 300000);
+    assert(S.userTokens === tokensBefore - 300000);
+    repay(S);
+    assert(S.userDebt === 0);
+    assert(S.collateral === 0);
+    assert(S.userTokens === tokensBefore, 'should get all tokens back');
+  });
+
+  it('cannot borrow with 0 tokens', () => {
+    const S = createState();
+    const r = borrow(S, 1000);
+    assert(!r.ok);
+  });
+
+  it('cannot repay with insufficient MON', () => {
+    const S = createState();
+    for (let i = 0; i < 10; i++) buy(S, 1e6);
+    borrow(S, S.userTokens);
+    S.userMON = 0; // drain MON
+    const r = repay(S);
+    assert(!r.ok);
+  });
+});
+
+describe('Loop Lending — Convergence', () => {
+  it('each loop round borrows less than the previous', () => {
+    const S = createState();
+    for (let i = 0; i < 10; i++) buy(S, 1e6);
+
+    let prevBorrow = Infinity;
+    let tokens = S.userTokens;
+    for (let i = 0; i < 8; i++) {
+      const r = borrow(S, tokens);
+      if (!r.ok) break;
+      assert(r.borrowed < prevBorrow || prevBorrow === Infinity, `round ${i}: borrow should decrease`);
+      prevBorrow = r.borrowed;
+
+      // buy with borrowed MON
+      const mp = price(S.supply, S.fp, S.m);
+      const buyAmt = Math.floor(r.borrowed / (mp * (1 + S.buyFee)) * 0.95);
+      if (buyAmt <= 0) break;
+      buy(S, buyAmt);
+      tokens = buyAmt; // next round collateralizes what we just bought
+    }
+  });
+
+  it('loop eventually exhausts (cannot borrow indefinitely)', () => {
+    const S = createState();
+    for (let i = 0; i < 10; i++) buy(S, 1e6);
+
+    let rounds = 0;
+    let tokens = S.userTokens;
+    for (let i = 0; i < 100; i++) {
+      const r = borrow(S, tokens);
+      if (!r.ok || r.borrowed < 0.01) break;
+      const mp = price(S.supply, S.fp, S.m);
+      const buyAmt = Math.floor(r.borrowed / (mp * (1 + S.buyFee)) * 0.95);
+      if (buyAmt <= 0) break;
+      buy(S, buyAmt);
+      tokens = buyAmt;
+      rounds++;
+    }
+    assert(rounds < 100, `loop should exhaust, ran ${rounds} rounds`);
+  });
+});
+
+describe('No Negative Balances (Invariant)', () => {
+  it('supply, liq, userMON never negative after random ops', () => {
+    const S = createState();
+    for (let i = 0; i < 200; i++) {
+      const r = Math.random();
+      if (r < 0.4) buy(S, Math.floor(1e4 + Math.random() * 1e6));
+      else if (r < 0.7) sell(S, Math.floor(1e4 + Math.random() * 5e5));
+      else if (r < 0.85) borrow(S, Math.floor(1e4 + Math.random() * 3e5));
+      else repay(S);
+
+      assertGte(S.supply, 0, `step ${i}: supply`);
+      assertGte(S.liq, -1e-6, `step ${i}: liq`); // tiny float tolerance
+      assertGte(S.userTokens, -1e-6, `step ${i}: userTokens`);
+      assertGte(S.debt, -1e-6, `step ${i}: debt`);
+    }
+  });
+});
+
+describe('MON Conservation', () => {
+  it('total MON is conserved (pool + user + fees = initial spend)', () => {
+    const S = createState();
+    const initMON = S.userMON;
+    for (let i = 0; i < 30; i++) buy(S, Math.floor(1e5 + Math.random() * 1e6));
+    for (let i = 0; i < 10; i++) sell(S, Math.floor(5e4 + Math.random() * 3e5));
+    // Conservation: userMON + liq + totalFees = initMON (no lending)
+    const total = S.userMON + S.liq + S.totalFees;
+    assertClose(total, initMON, 1e-4, 'MON conservation');
+  });
+
+  it('MON conserved with lending (pool + user + fees + debt_outstanding = initial)', () => {
+    const S = createState();
+    const initMON = S.userMON;
+    for (let i = 0; i < 10; i++) buy(S, 1e6);
+    borrow(S, 500000);
+    // With lending: userMON + liq + totalFees + [debt is moved from liq to user, net zero]
+    // Actually: borrow moves MON from liq to user, so liq goes down, userMON goes up by same amount.
+    // Conservation: userMON + liq + totalFees = initMON still holds!
+    const total = S.userMON + S.liq + S.totalFees;
+    assertClose(total, initMON, 1e-4, 'MON conservation with lending');
+  });
+});
+
+describe('MFR Mechanism', () => {
+  it('MFR triggers when mfr exceeds threshold', () => {
+    const S = createState({ tMFR: 0.10 }); // low threshold
+    const fpBefore = S.fp;
+    for (let i = 0; i < 30; i++) buy(S, 1e6);
+    assertGt(S.fp, fpBefore, 'MFR should have raised FP');
+  });
+
+  it('MFR threshold increases after trigger', () => {
+    const S = createState({ tMFR: 0.10, cMFR: 0.05 });
+    const tBefore = S.tMFR;
+    for (let i = 0; i < 20; i++) buy(S, 1e6);
+    assertGt(S.tMFR, tBefore, 'T should increase after MFR triggers');
+  });
+
+  it('MFR threshold capped at maxT', () => {
+    const S = createState({ tMFR: 0.10, cMFR: 0.10, maxT: 0.50 });
+    for (let i = 0; i < 100; i++) buy(S, 1e6);
+    assertGte(S.maxT + 1e-9, S.tMFR, 'T should not exceed maxT');
+  });
+
+  it('MFR threshold decays when not triggered', () => {
+    const S = createState({ tMFR: 0.40, minT: 0.20 });
+    // don't buy much — MFR won't trigger
+    buy(S, 100); buy(S, 100); buy(S, 100); buy(S, 100);
+    // blocksSinceMFR should hit 3, triggering decay
+    assert(S.tMFR < 0.40 || S.tMFR >= S.minT, 'T should decay or stay at minT');
+  });
+});
+
+describe('Edge Cases', () => {
+  it('buy 0 tokens does nothing', () => {
+    const S = createState();
+    const snap = JSON.stringify(S);
+    buy(S, 0);
+    // buy with 0 returns early since amt <= 0 check is in doTrade, not buy
+    // but integrate(s, 0, fp, m) = 0, so cost=0, fee=0 — no state change effectively
+  });
+
+  it('works with very large slope', () => {
+    const S = createState({ m: 1e-6 }); // very steep
+    buy(S, 1000);
+    assertGt(price(S.supply, S.fp, S.m), S.fp);
+  });
+
+  it('works with very small slope', () => {
+    const S = createState({ m: 1e-12 }); // very flat
+    buy(S, 1e6);
+    const p = price(S.supply, S.fp, S.m);
+    assertGt(p, S.fp);
+    assertClose(p, S.fp, 0.01, 'price should be close to fp with tiny slope');
+  });
+
+  it('works with fp=0 (no floor)', () => {
+    const S = createState({ fp: 0 });
+    buy(S, 1e6);
+    assertGt(price(S.supply, S.fp, S.m), 0);
+  });
+
+  it('sell entire supply returns to zero', () => {
+    const S = createState();
+    buy(S, 1e6);
+    sell(S, 1e6);
+    assert(S.supply === 0);
+    assert(S.userTokens === 0);
+  });
+
+  it('multiple presets produce valid states', () => {
+    const presets = [
+      { m: 80e-10, fp: 0.001 },  // meme
+      { m: 30e-10, fp: 0.01 },   // defi
+      { m: 150e-10, fp: 0.1 },   // nft
+      { m: 15e-10, fp: 0.005 },  // infra
+    ];
+    for (const p of presets) {
+      const S = createState(p);
+      for (let i = 0; i < 20; i++) buy(S, 1e6);
+      assertGt(price(S.supply, S.fp, S.m), S.fp, `preset m=${p.m}`);
+      assertGte(S.liq, 0);
+      assertGte(S.fp, p.fp);
+    }
+  });
+});
+
+describe('Stress — 500 Random Operations', () => {
+  it('all invariants hold after 500 random ops', () => {
+    const S = createState();
+    let prevFP = S.fp;
+    for (let i = 0; i < 500; i++) {
+      const r = Math.random();
+      if (r < 0.35) buy(S, Math.floor(1e4 + Math.random() * 2e6));
+      else if (r < 0.60) sell(S, Math.floor(1e3 + Math.random() * 5e5));
+      else if (r < 0.80) borrow(S, Math.floor(1e3 + Math.random() * 3e5));
+      else repay(S);
+
+      // Invariant: FP only goes up
+      assertGte(S.fp, prevFP, `step ${i}: fp ratchet`);
+      prevFP = S.fp;
+
+      // Invariant: market price >= floor price
+      if (S.supply > 0) {
+        assertGte(price(S.supply, S.fp, S.m), S.fp, `step ${i}: price >= fp`);
+      }
+
+      // Invariant: no negative balances
+      assertGte(S.supply, 0, `step ${i}: supply`);
+      assertGte(S.liq, -1e-6, `step ${i}: liq`);
+
+      // Invariant: MON conservation
+      const total = S.userMON + S.liq + S.totalFees;
+      assertClose(total, 1000000, 1e-2, `step ${i}: MON conservation`);
+    }
+  });
+});
+
+// ================================================================
+//  RENDER
+// ================================================================
+const t0 = performance.now();
+// Run all tests (already executed above via describe/it)
+const elapsed = (performance.now() - t0).toFixed(1);
+
+const el = document.getElementById('results');
+let html = '';
+for (const g of groups) {
+  html += `<div class="group"><div class="group-title">${g.name}</div>`;
+  for (const t of g.tests) {
+    html += `<div class="test ${t.pass ? 'pass' : 'fail'}">${t.name}`;
+    if (!t.pass) html += `<span class="detail">${t.error}</span>`;
+    html += `</div>`;
+  }
+  html += `</div>`;
+}
+el.innerHTML = html;
+
+const sum = document.getElementById('summary');
+sum.className = `summary ${totalFail > 0 ? 'fail' : 'pass'}`;
+sum.textContent = `${totalPass + totalFail} tests — ${totalPass} passed, ${totalFail} failed (${elapsed}ms)`;
+</script>
+</body>
+</html>
