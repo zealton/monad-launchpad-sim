@@ -691,7 +691,9 @@ function scrollLogToStep(stepIdx){
   for(const e of entries){
     if(parseInt(e.dataset.step)===stepIdx){
       e.style.background='rgba(132,94,247,.15)';
-      e.scrollIntoView({block:'center',behavior:'smooth'});
+      // Scroll within log container only — don't move the page
+      const top=e.offsetTop-area.offsetTop-area.clientHeight/2+e.clientHeight/2;
+      area.scrollTo({top:Math.max(0,top),behavior:'smooth'});
       break;
     }
   }
