@@ -305,7 +305,7 @@ function autoUpFP(){
 function doTrade(side){
   const amt=parseFloat(document.getElementById('tradeAmt').value);if(!amt||amt<=0)return;
   if(side==='buy'){const c=integrate(S.supply,amt,S.fp,S.m),f=c*S.buyFee,t=c+f;if(S.userMON<t){log(`Not enough MON (need ${fmt(t)}, have ${fmt(S.userMON)})`,'sell');return}S.supply+=amt;S.liq+=c;S.totalFees+=f;S.totalVol+=c;S.userTokens+=amt;S.userMON-=t;log(`BUY ${fmt(amt)} @ ${fmtP(c/amt)} | Cost ${fmt(t)} MON`,'buy');autoUpFP()}
-  else{const free=S.userTokens,sa=Math.min(amt,free,S.supply);if(sa<=0){log('No tokens to sell','sell');return}const p=integrate(S.supply-sa,sa,S.fp,S.m),f=p*S.sellFee,n=p-f;if(n>S.liq){log('Insufficient liquidity','sell');return}S.supply-=sa;S.liq-=p;S.totalFees+=f;S.totalVol+=p;S.userTokens-=sa;S.userMON+=n;log(`SELL ${fmt(sa)} @ ${fmtP(p/sa)} | Recv ${fmt(n)} MON`,'sell');autoUpFP()}
+  else{const free=S.userTokens,sa=Math.min(amt,free,S.supply);if(sa<=0){log('No tokens to sell','sell');return}let p=integrate(S.supply-sa,sa,S.fp,S.m),f=p*S.sellFee,n=p-f;if(n>S.liq){n=S.liq;f=n*S.sellFee/(1-S.sellFee);p=n+f}S.supply-=sa;S.liq-=n;S.totalFees+=f;S.totalVol+=p;S.userTokens-=sa;S.userMON+=n;log(`SELL ${fmt(sa)} @ ${fmtP(p/sa)} | Recv ${fmt(n)} MON`,'sell');autoUpFP()}
   record();updateUI();
 }
 
@@ -557,9 +557,9 @@ function doBuy(amt){
 
 function doSell(amt){
   const sa=Math.min(amt,S.supply);if(sa<=0)return;
-  const p=integrate(S.supply-sa,sa,S.fp,S.m),f=p*S.sellFee,n=p-f;
-  if(n>S.liq)return;
-  S.supply-=sa;S.liq-=p;S.totalFees+=f;S.totalVol+=p;
+  let p=integrate(S.supply-sa,sa,S.fp,S.m),f=p*S.sellFee,n=p-f;
+  if(n>S.liq){n=S.liq;f=n*S.sellFee/(1-S.sellFee);p=n+f}
+  S.supply-=sa;S.liq-=n;S.totalFees+=f;S.totalVol+=p;
   log(`SELL ${fmt(sa)} @ ${fmtP(p/sa)}`,'sell');
   autoUpFP();record();updateUI();
 }
@@ -608,7 +608,7 @@ function doSimLoop(initBuyAmt, rounds, repayAfter){
     const sellAmt=Math.min(tokensToSell,extTokens,S.supply);
     if(sellAmt>0){
       const p=integrate(S.supply-sellAmt,sellAmt,S.fp,S.m),fe=p*S.sellFee,net=p-fe;
-      S.supply-=sellAmt;S.liq-=p;S.totalFees+=fe;extTokens-=sellAmt;
+      S.supply-=sellAmt;S.liq-=net;S.totalFees+=fe;extTokens-=sellAmt;
       log(`[SimLoop] SELL ${fmt(sellAmt)} to repay → ${fmt(net)} MON`,'sell');
       const repayAmt=Math.min(extDebt,net);
       S.liq+=repayAmt;S.debt-=repayAmt;extDebt-=repayAmt;
