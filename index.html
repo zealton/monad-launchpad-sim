@@ -159,7 +159,8 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
         <button onclick="applyPreset('infra')" id="p-infra" title="Low slope, low fees — infrastructure token">Infra</button>
         <button onclick="applyPreset('hieff')" id="p-hieff" title="Low slope + aggressive MFR (T=10%, X=15%) — floor price chases market price fast, higher capital efficiency but pool lendable drains faster" style="color:var(--orange)">Hi-Eff</button>
       </div>
-      <div class="param-row"><label title="Controls how fast price rises with supply. Higher = steeper curve, more price impact per trade.">slope (m) ×10⁻¹⁰</label><input type="number" id="p_slope" value="67" min="1" max="1000" step="1" onchange="onP()"></div>
+      <div class="param-row"><label title="Controls how fast price rises with supply. Higher = steeper curve, more price impact per trade. Unit depends on curve power n.">slope (m)</label><input type="number" id="p_slope" value="33.6" min="0.01" max="99999" step="0.1" onchange="onP()"></div>
+      <div class="param-row"><label title="Curve exponent. price = fp + m × supply^n. Controls MC/TVL ratio: n=1 → 2x (linear), n=2 → 3x (quadratic, recommended), n=3 → 4x, n=5 → 6x (≈pump.fun). Higher n = early buyers get more advantage.">curve power (n)</label><input type="number" id="p_n" value="2" min="1" max="6" step="0.5" onchange="onP()"></div>
       <div class="param-row"><label title="Initial floor price in MON. Minimum guaranteed price — can only go up via MFR, never down.">floor price (MON)</label><input type="number" id="p_fp" value="0.00345" min="0.0001" max="100" step="0.0001" onchange="onP()"></div>
       <div class="param-row"><label title="Starting token supply. Usually 0 for a new launch.">init supply</label><input type="number" id="p_supply" value="0" min="0" max="1e9" step="100000" onchange="onP()"></div>
       <div class="param-row"><label title="Starting MON in the bonding curve pool. Usually 0 for a new launch.">init liquidity (MON)</label><input type="number" id="p_liq" value="0" min="0" max="1e9" step="1000" onchange="onP()"></div>
@@ -335,8 +336,9 @@ let S={},H={},logs=[],step=0;
 function gp(id){return parseFloat(document.getElementById(id).value)}
 function initH(){return{mp:[],fp:[],supply:[],liqTotal:[],liqFloor:[],liqMarket:[],mfr:[],debt:[],collateral:[],util:[]}}
 function initState(){
-  const m=gp('p_slope')*1e-10;
-  S={m,fp:gp('p_fp'),supply:gp('p_supply'),liq:gp('p_liq'),
+  const n=gp('p_n'),m=gp('p_slope')*Math.pow(10, -(7*n+3));
+  // slope scale auto-adjusts with n: n=1→×1e-10, n=2→×1e-17, n=3→×1e-24
+  S={m,n,fp:gp('p_fp'),supply:gp('p_supply'),liq:gp('p_liq'),
     tMFR:gp('p_t')/100,xMFR:gp('p_x')/100,cMFR:gp('p_c')/100,
     maxT:gp('p_maxT')/100,minT:gp('p_minT')/100,
     buyFee:gp('p_buyFee')/100,sellFee:gp('p_sellFee')/100,
@@ -346,20 +348,19 @@ function initState(){
 }
 
 // === PRICE FIELD ===
-// Linear bonding curve: price = fp + m * supply
-// - Always monotonically increasing
+// Power bonding curve: price = fp + m × supply^n
+// - n=1: linear (MC/TVL≈2x), n=2: quadratic (≈3x), n=5: ≈pump.fun (≈6x)
+// - Always monotonically increasing for n≥1
 // - Floor price guaranteed (price >= fp at all supply levels)
-// - MFR raising fp shifts entire curve up (correct behavior)
-// - Cost to buy = integral of (fp + m*x) dx from supply to supply+amount
-//              = fp*amount + m/2 * ((supply+amount)^2 - supply^2)
-//              = fp*amount + m*amount*(supply + amount/2)
+// - MFR raising fp shifts entire curve up
+// - Cost = ∫(fp + m×x^n)dx = fp×amt + m×[s2^(n+1) - s1^(n+1)]/(n+1)
 function price(x,fp,m){
   if(x<=0)return fp;
-  return fp + m * x;
+  return fp + m * Math.pow(x, S.n);
 }
 function integrate(sx,amt,fp,m){
-  // Exact closed-form: no numerical approximation needed
-  return fp * amt + m * amt * (sx + amt / 2);
+  const n1=S.n+1;
+  return fp * amt + m * (Math.pow(sx+amt, n1) - Math.pow(sx, n1)) / n1;
 }
 
 // === LIQUIDITY & MFR ===
@@ -860,13 +861,13 @@ function updCharts(){
 
 // === PRESETS ===
 const P={
-  meme:{slope:67,fp:.00345,supply:0,liq:0,t:20,x:8,c:2,maxT:50,minT:15,buyFee:1,sellFee:1.5,ltv:100,apr:10},
-  defi:{slope:30,fp:.01,supply:0,liq:0,t:25,x:5,c:1.5,maxT:45,minT:15,buyFee:.5,sellFee:1,ltv:90,apr:8},
-  nft:{slope:120,fp:.005,supply:0,liq:0,t:25,x:8,c:2,maxT:50,minT:20,buyFee:2,sellFee:3,ltv:70,apr:15},
-  infra:{slope:20,fp:.008,supply:0,liq:0,t:20,x:4,c:1,maxT:40,minT:10,buyFee:.3,sellFee:.5,ltv:90,apr:5},
-  hieff:{slope:30,fp:.005,supply:0,liq:0,t:10,x:15,c:1,maxT:25,minT:5,buyFee:.5,sellFee:1,ltv:100,apr:5},
+  meme:{slope:33.6,n:2,fp:.00345,supply:0,liq:0,t:20,x:8,c:2,maxT:50,minT:15,buyFee:1,sellFee:1.5,ltv:100,apr:10},
+  defi:{slope:25,n:2,fp:.01,supply:0,liq:0,t:25,x:5,c:1.5,maxT:45,minT:15,buyFee:.5,sellFee:1,ltv:90,apr:8},
+  nft:{slope:50,n:2,fp:.005,supply:0,liq:0,t:25,x:8,c:2,maxT:50,minT:20,buyFee:2,sellFee:3,ltv:70,apr:15},
+  infra:{slope:18,n:2,fp:.008,supply:0,liq:0,t:20,x:4,c:1,maxT:40,minT:10,buyFee:.3,sellFee:.5,ltv:90,apr:5},
+  hieff:{slope:36,n:2,fp:.005,supply:0,liq:0,t:10,x:15,c:1,maxT:25,minT:5,buyFee:.5,sellFee:1,ltv:100,apr:5},
 };
-function applyPreset(n){const p=P[n];document.getElementById('p_slope').value=p.slope;document.getElementById('p_fp').value=p.fp;document.getElementById('p_supply').value=p.supply;document.getElementById('p_liq').value=p.liq;document.getElementById('p_t').value=p.t;document.getElementById('p_x').value=p.x;document.getElementById('p_c').value=p.c;document.getElementById('p_maxT').value=p.maxT;document.getElementById('p_minT').value=p.minT;document.getElementById('p_buyFee').value=p.buyFee;document.getElementById('p_sellFee').value=p.sellFee;document.getElementById('p_ltv').value=p.ltv;document.getElementById('p_apr').value=p.apr;document.querySelectorAll('.presets button').forEach(b=>b.classList.remove('active'));document.getElementById('p-'+n).classList.add('active');initState()}
+function applyPreset(k){const p=P[k];document.getElementById('p_slope').value=p.slope;document.getElementById('p_n').value=p.n;document.getElementById('p_fp').value=p.fp;document.getElementById('p_supply').value=p.supply;document.getElementById('p_liq').value=p.liq;document.getElementById('p_t').value=p.t;document.getElementById('p_x').value=p.x;document.getElementById('p_c').value=p.c;document.getElementById('p_maxT').value=p.maxT;document.getElementById('p_minT').value=p.minT;document.getElementById('p_buyFee').value=p.buyFee;document.getElementById('p_sellFee').value=p.sellFee;document.getElementById('p_ltv').value=p.ltv;document.getElementById('p_apr').value=p.apr;document.querySelectorAll('.presets button').forEach(b=>b.classList.remove('active'));document.getElementById('p-'+k).classList.add('active');initState()}
 function onP(){document.querySelectorAll('.presets button').forEach(b=>b.classList.remove('active'));initState()}
 function reset(){initState();logs=[];document.getElementById('logArea').innerHTML='<div class="log-entry" style="color:var(--text2)">Reset.</div>'}
 
