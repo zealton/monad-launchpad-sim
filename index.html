@@ -482,136 +482,136 @@ async function autoSim(type){
     resolve();
   });
 
-  // Trade sizes calibrated for ~$100K TVL (4M MON) at end of sim
-  // With slope=80e-10, fp=0.001: ~30M tokens → ~4M MON TVL
+  // Trade sizes calibrated so final TVL ≈ $80K-$120K (3.2M-4.8M MON)
+  // With slope=80e-10, fp=0.001: need ~30-35M net supply
   if(type==='launch'){
     log('── Seed buyers ──','mfr');
-    for(let i=0;i<10&&simRunning;i++){doBuy(rnd(50000,200000));await delay()}
+    for(let i=0;i<10&&simRunning;i++){doBuy(rnd(100000,400000));await delay()}
     log('── FOMO wave 1 ──','mfr');
-    for(let i=0;i<20&&simRunning;i++){doBuy(rnd(200000,800000));await delay()}
+    for(let i=0;i<20&&simRunning;i++){doBuy(rnd(500000,1500000));await delay()}
     log('── Early loopers ──','mfr');
-    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(150000,500000),3,false);await delay()}
+    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(400000,1000000),3,false);await delay()}
     log('── Profit taking ──','mfr');
-    for(let i=0;i<10&&simRunning;i++){doSell(rnd(80000,300000));await delay()}
+    for(let i=0;i<10&&simRunning;i++){doSell(rnd(200000,600000));await delay()}
     log('── Second wave + loops ──','mfr');
     for(let i=0;i<12&&simRunning;i++){
-      if(Math.random()<0.7) doBuy(rnd(100000,600000));
-      else doSimLoop(rnd(100000,400000),2,false);
+      if(Math.random()<0.7) doBuy(rnd(300000,1200000));
+      else doSimLoop(rnd(200000,800000),2,false);
       await delay();
     }
     log('── Consolidation ──','mfr');
     for(let i=0;i<8&&simRunning;i++){
-      if(Math.random()<0.45) doBuy(rnd(80000,400000));
-      else doSell(rnd(50000,250000));
+      if(Math.random()<0.45) doBuy(rnd(200000,800000));
+      else doSell(rnd(100000,500000));
       await delay();
     }
   }
   else if(type==='mature'){
     for(let i=0;i<100&&simRunning;i++){
       const r=Math.random();
-      if(r<0.40) doBuy(rnd(80000,500000));
-      else if(r<0.65) doSell(rnd(40000,300000));
-      else if(r<0.80) doSimLoop(rnd(100000,400000),2,Math.random()<0.5);
-      else if(r<0.90) doBuy(rnd(600000,1500000));
-      else doSell(rnd(300000,1000000));
+      if(r<0.40) doBuy(rnd(150000,600000));
+      else if(r<0.65) doSell(rnd(80000,400000));
+      else if(r<0.80) doSimLoop(rnd(150000,500000),2,Math.random()<0.5);
+      else if(r<0.90) doBuy(rnd(800000,2000000));
+      else doSell(rnd(400000,1200000));
       await delay();
     }
   }
   else if(type==='crash'){
     log('── Pump + leverage ──','mfr');
-    for(let i=0;i<16&&simRunning;i++){doBuy(rnd(200000,800000));await delay()}
-    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(200000,600000),3,false);await delay()}
+    for(let i=0;i<20&&simRunning;i++){doBuy(rnd(500000,1500000));await delay()}
+    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(400000,1200000),3,false);await delay()}
     log('── Peak ──','mfr');
-    for(let i=0;i<6&&simRunning;i++){doSell(rnd(100000,400000));await delay()}
+    for(let i=0;i<6&&simRunning;i++){doSell(rnd(200000,800000));await delay()}
     log('── Panic: sells + forced repays ──','mfr');
     for(let i=0;i<40&&simRunning;i++){
       const r=Math.random();
-      if(r<0.6) doSell(rnd(150000,600000));
-      else if(r<0.8) doSimLoop(rnd(80000,200000),1,true);
-      else doBuy(rnd(30000,150000));
+      if(r<0.55) doSell(rnd(300000,1200000));
+      else if(r<0.75) doSimLoop(rnd(150000,500000),1,true);
+      else doBuy(rnd(100000,400000));
       await delay();
     }
   }
   else if(type==='leverage'){
     log('── Accumulation ──','mfr');
-    for(let i=0;i<16&&simRunning;i++){doBuy(rnd(200000,600000));await delay()}
+    for(let i=0;i<20&&simRunning;i++){doBuy(rnd(600000,1800000));await delay()}
     log('── Leverage wave 1: aggressive loopers ──','mfr');
-    for(let i=0;i<8&&simRunning;i++){doSimLoop(rnd(200000,600000),rnd(3,5),false);await delay()}
+    for(let i=0;i<8&&simRunning;i++){doSimLoop(rnd(500000,1500000),rnd(3,5),false);await delay()}
     log('── Organic trading ──','mfr');
     for(let i=0;i<12&&simRunning;i++){
-      if(Math.random()<0.55) doBuy(rnd(80000,400000));
-      else doSell(rnd(40000,200000));
+      if(Math.random()<0.55) doBuy(rnd(200000,800000));
+      else doSell(rnd(100000,400000));
       await delay();
     }
     log('── Leverage wave 2: conservative (repay after) ──','mfr');
-    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(100000,400000),2,true);await delay()}
+    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(300000,800000),2,true);await delay()}
     log('── Leverage wave 3: mixed ──','mfr');
-    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(150000,500000),rnd(2,4),Math.random()<0.4);await delay()}
+    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(400000,1000000),rnd(2,4),Math.random()<0.4);await delay()}
     log('── Cooldown ──','mfr');
     for(let i=0;i<12&&simRunning;i++){
-      if(Math.random()<0.4) doBuy(rnd(80000,300000));
-      else doSell(rnd(40000,200000));
+      if(Math.random()<0.4) doBuy(rnd(200000,600000));
+      else doSell(rnd(100000,400000));
       await delay();
     }
   }
   else if(type==='whale'){
     log('── Retail base ──','mfr');
-    for(let i=0;i<16&&simRunning;i++){doBuy(rnd(80000,300000));await delay()}
+    for(let i=0;i<16&&simRunning;i++){doBuy(rnd(200000,600000));await delay()}
     log('── 🐋 Whale loop leverage ──','mfr');
-    doSimLoop(rnd(1500000,3000000),5,false);await delay();
-    for(let i=0;i<4&&simRunning;i++){doBuy(rnd(800000,2000000));await delay()}
+    doSimLoop(rnd(3000000,6000000),5,false);await delay();
+    for(let i=0;i<4&&simRunning;i++){doBuy(rnd(1500000,4000000));await delay()}
     log('── 🐋 Shake out ──','mfr');
-    for(let i=0;i<12&&simRunning;i++){doSell(rnd(150000,600000));await delay()}
+    for(let i=0;i<12&&simRunning;i++){doSell(rnd(300000,1200000));await delay()}
     log('── Retail panic sell ──','mfr');
-    for(let i=0;i<8&&simRunning;i++){doSell(rnd(80000,400000));await delay()}
+    for(let i=0;i<8&&simRunning;i++){doSell(rnd(200000,800000));await delay()}
     log('── 🐋 Re-accumulation with loops ──','mfr');
-    doSimLoop(rnd(1000000,2000000),3,false);await delay();
-    for(let i=0;i<6&&simRunning;i++){doBuy(rnd(600000,1500000));await delay()}
+    doSimLoop(rnd(2000000,4000000),3,false);await delay();
+    for(let i=0;i<6&&simRunning;i++){doBuy(rnd(1200000,3000000));await delay()}
     log('── Organic recovery ──','mfr');
     for(let i=0;i<10&&simRunning;i++){
-      if(Math.random()<0.6) doBuy(rnd(100000,500000));
-      else doSell(rnd(80000,300000));
+      if(Math.random()<0.6) doBuy(rnd(300000,1000000));
+      else doSell(rnd(150000,600000));
       await delay();
     }
     log('── Late retail FOMO ──','mfr');
-    for(let i=0;i<8&&simRunning;i++){doBuy(rnd(200000,800000));await delay()}
+    for(let i=0;i<8&&simRunning;i++){doBuy(rnd(400000,1500000));await delay()}
   }
   else if(type==='full'){
     log('── Phase 1: Launch ──','mfr');
-    for(let i=0;i<12&&simRunning;i++){doBuy(rnd(100000,500000));await delay()}
+    for(let i=0;i<10&&simRunning;i++){doBuy(rnd(200000,600000));await delay()}
 
     log('── Phase 2: Growth + Loop Leverage ──','mfr');
     for(let i=0;i<24&&simRunning;i++){
       const r=Math.random();
       if(r<0.45) doBuy(rnd(200000,800000));
-      else if(r<0.65) doSell(rnd(80000,300000));
-      else if(r<0.85) doSimLoop(rnd(100000,500000),rnd(2,4),false);
-      else doBuy(rnd(1000000,2000000));
+      else if(r<0.65) doSell(rnd(100000,400000));
+      else if(r<0.85) doSimLoop(rnd(200000,600000),rnd(2,4),false);
+      else doBuy(rnd(500000,1000000));
       await delay();
     }
 
     log('── Phase 3: Correction + Forced Repays ──','mfr');
     for(let i=0;i<20&&simRunning;i++){
       const r=Math.random();
-      if(r<0.5) doSell(rnd(100000,500000));
-      else if(r<0.75) doSimLoop(rnd(80000,200000),1,true);
-      else doBuy(rnd(80000,300000));
+      if(r<0.5) doSell(rnd(200000,800000));
+      else if(r<0.75) doSimLoop(rnd(150000,400000),1,true);
+      else doBuy(rnd(150000,600000));
       await delay();
     }
 
     log('── Phase 4: Recovery ──','mfr');
     for(let i=0;i<16&&simRunning;i++){
-      if(Math.random()<0.65) doBuy(rnd(150000,600000));
-      else doSell(rnd(80000,400000));
+      if(Math.random()<0.65) doBuy(rnd(200000,700000));
+      else doSell(rnd(100000,500000));
       await delay();
     }
 
     log('── Phase 5: Maturity (mixed with loops) ──','mfr');
     for(let i=0;i<24&&simRunning;i++){
       const r=Math.random();
-      if(r<0.35) doBuy(rnd(100000,400000));
-      else if(r<0.60) doSell(rnd(80000,350000));
-      else if(r<0.80) doSimLoop(rnd(80000,300000),2,Math.random()<0.6);
+      if(r<0.35) doBuy(rnd(200000,800000));
+      else if(r<0.60) doSell(rnd(150000,600000));
+      else if(r<0.80) doSimLoop(rnd(200000,600000),2,Math.random()<0.6);
       else doBuy(rnd(600000,1500000));
       await delay();
     }
