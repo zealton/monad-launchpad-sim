@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monad Launchpad — Bonding Curve + Loop Lending</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+:root{--bg:#0c0c0c;--card:#141414;--card2:#1a1a1a;--border:#2a2a2a;--text:#d4d4d4;--text2:#666;--accent:#7c3aed;--cyan:#06b6d4;--green:#10b981;--red:#ef4444;--orange:#f59e0b;--pink:#ec4899;--mon:#a78bfa;--font:'JetBrains Mono',ui-monospace,'SF Mono','Cascadia Code',monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;overflow:hidden;font-size:12px}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+
+/* Header */
+.header{padding:8px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--card)}
+.header h1{font-size:13px;font-weight:700;color:var(--green);letter-spacing:.02em}
+.header h1::before{content:'> ';color:var(--text2)}
+.tag{padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600;font-family:var(--font)}
+.tag-mon{background:var(--mon);color:#000}.tag-new{background:#1a1a1a;color:var(--cyan);border:1px solid var(--cyan)}
+
+/* Layout */
+.layout{display:grid;grid-template-columns:280px 1fr;height:calc(100vh - 36px)}
+.sidebar{border-right:1px solid var(--border);padding:8px;overflow-y:auto;background:var(--card)}
+.main{padding:10px;overflow-y:auto}
+
+/* Card */
+.card{background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:8px;margin-bottom:6px}
+h3{font-size:10px;font-weight:600;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em}
+
+/* Collapsible details */
+details{margin-bottom:6px}
+details summary{cursor:pointer;font-size:11px;font-weight:500;color:var(--text2);padding:5px 8px;background:var(--card2);border:1px solid var(--border);border-radius:4px;list-style:none;display:flex;align-items:center;gap:6px;user-select:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:'▸';font-size:10px;color:var(--accent);transition:transform .15s;display:inline-block;width:10px}
+details[open] summary::before{transform:rotate(90deg)}
+details[open] summary{border-radius:4px 4px 0 0;border-bottom-color:transparent;background:var(--bg)}
+details .det-body{background:var(--card2);border:1px solid var(--border);border-top:0;border-radius:0 0 4px 4px;padding:8px}
+
+/* Params */
+.param-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
+.param-row:last-child{margin-bottom:0}
+.param-row label{font-size:11px;color:var(--text2);flex:1}
+.param-row input[type=number]{width:85px;background:var(--bg);border:1px solid var(--border);color:var(--green);padding:3px 5px;border-radius:3px;font-size:11px;text-align:right;font-family:var(--font)}
+
+/* Presets */
+.presets{display:flex;gap:4px;margin-bottom:6px}
+.presets button{flex:1;padding:4px 2px;border-radius:3px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer;font-size:10px;font-weight:500;font-family:var(--font);transition:all .1s}
+.presets button:hover{border-color:var(--green);color:var(--green)}
+.presets button.active{background:var(--green);border-color:var(--green);color:#000}
+
+/* Buttons */
+.btn{padding:5px 10px;border-radius:3px;border:none;cursor:pointer;font-weight:600;font-size:10px;font-family:var(--font);transition:all .1s;text-transform:uppercase;letter-spacing:.03em}
+.btn:hover{filter:brightness(1.15)}
+.btn-buy{background:var(--green);color:#000}.btn-sell{background:var(--red);color:#fff}
+.btn-borrow{background:var(--orange);color:#000}.btn-repay{background:var(--mon);color:#000}
+.btn-reset{background:var(--border);color:var(--text)}
+.btn-scene{color:#fff;flex:1;min-width:45px}
+
+.trade-input{display:flex;gap:4px;margin-bottom:6px}
+.trade-input input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--green);padding:5px 7px;border-radius:3px;font-size:12px;font-family:var(--font)}
+.trade-actions{display:flex;gap:4px;flex-wrap:wrap}
+
+/* Loan mini stats */
+.loan-row{display:flex;gap:3px;margin-bottom:6px;flex-wrap:wrap}
+.loan-chip{background:var(--bg);border-radius:3px;padding:3px 6px;font-size:10px;flex:1;min-width:0;border:1px solid var(--border)}
+.loan-chip .lk{color:var(--text2)}.loan-chip .lv{font-weight:600;font-size:11px;display:block;margin-top:1px}
+
+/* Top ticker bar */
+.dash-section{margin-bottom:6px}
+.dash-label{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;padding-left:2px;display:flex;align-items:center;gap:5px}
+.dash-label::after{content:'';flex:1;height:1px;background:var(--border)}
+.ticker{display:flex;gap:4px;flex-wrap:wrap}
+.ticker-item{background:var(--card2);border:1px solid var(--border);border-radius:3px;padding:4px 8px;flex:1;min-width:0;text-align:center}
+.ticker-item .tk{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em}
+.ticker-item .tv{font-size:13px;font-weight:700;margin-top:1px;font-variant-numeric:tabular-nums}
+.chart-title{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;cursor:help;border-bottom:1px dashed var(--border);display:inline-block}
+
+/* Charts */
+.chart-wrap{position:relative;height:220px}.chart-wrap canvas{border-radius:3px}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px}
+
+/* MFR bar */
+.mfr-bar-outer{background:var(--bg);border-radius:3px;height:16px;position:relative;overflow:visible;margin-top:3px;border:1px solid var(--border)}
+.mfr-bar-inner{height:100%;border-radius:2px;transition:width .3s}
+.mfr-bar-threshold{position:absolute;top:-3px;height:calc(100% + 6px);width:2px;background:var(--orange);z-index:2;border-radius:1px;box-shadow:0 0 4px rgba(251,191,36,.5)}
+.mfr-bar-threshold::after{content:attr(data-label);position:absolute;bottom:calc(100% + 1px);left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:var(--orange);white-space:nowrap}
+.mfr-labels{display:flex;justify-content:space-between;font-size:9px;color:var(--text2);margin-top:2px}
+.mfr-val{position:absolute;right:5px;top:50%;transform:translateY(-50%);font-size:10px;font-weight:700;color:var(--text);z-index:3}
+
+/* Log */
+.log-area{max-height:150px;overflow-y:auto;font-size:10px;line-height:1.6}
+.log-entry{padding:2px 4px;border-bottom:1px solid #1a1a1a;color:var(--text2);border-radius:2px;transition:background .1s}
+.log-entry:hover{background:rgba(132,94,247,.08)}
+
+@media(max-width:900px){.layout{grid-template-columns:1fr}.sidebar{max-height:none;border-right:none;border-bottom:1px solid var(--border)}.ticker{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Monad Launchpad Simulator</h1>
+  <span class="tag tag-mon">MON</span>
+  <span class="tag tag-new">Bonding Curve + Loop Lending</span>
+</div>
+
+<div class="layout">
+<!-- ====== SIDEBAR ====== -->
+<div class="sidebar">
+
+  <!-- Presets — always visible -->
+  <div class="card">
+    <div class="presets">
+      <button onclick="applyPreset('meme')" id="p-meme" class="active">Meme</button>
+      <button onclick="applyPreset('defi')" id="p-defi">DeFi</button>
+      <button onclick="applyPreset('nft')" id="p-nft">NFT</button>
+      <button onclick="applyPreset('infra')" id="p-infra">Infra</button>
+    </div>
+    <div class="trade-input"><input type="number" id="tradeAmt" placeholder="Token amount" value="1000000"></div>
+    <div class="trade-actions" style="margin-bottom:6px">
+      <button class="btn btn-buy" onclick="doTrade('buy')">Buy</button>
+      <button class="btn btn-sell" onclick="doTrade('sell')">Sell</button>
+      <button class="btn btn-reset" onclick="reset()">Reset</button>
+    </div>
+  </div>
+
+  <!-- Auto Sim -->
+  <div class="card">
+    <h3>Auto Simulation</h3>
+    <div class="trade-actions" style="margin-bottom:5px">
+      <button class="btn btn-scene" style="background:var(--green);color:#000" onclick="autoSim('launch')" title="Seed → FOMO → Loop leverage → Profit-taking → 2nd wave">🚀 Launch</button>
+      <button class="btn btn-scene" style="background:var(--cyan);color:#000" onclick="autoSim('mature')" title="50 rounds: 40% buy, 25% sell, 15% loop, 10% whale, 10% whale sell">📈 Mature</button>
+      <button class="btn btn-scene" style="background:var(--red)" onclick="autoSim('crash')" title="Pump+Loop → Peak → Panic sells + Forced repays">💥 Crash</button>
+    </div>
+    <div class="trade-actions" style="margin-bottom:5px">
+      <button class="btn btn-scene" style="background:var(--orange);color:#000" onclick="autoSim('leverage')" title="Accumulate → Aggressive loops → Trading → Conservative loops w/ repay → Cool">🔄 Leverage</button>
+      <button class="btn btn-scene" style="background:var(--pink)" onclick="autoSim('full')" title="Launch → Growth+Loop → Correction+Unwind → Recovery → Maturity (5 phases)">🎲 Full Cycle</button>
+      <button class="btn btn-scene" style="background:var(--accent)" onclick="autoSim('whale')" title="Retail → Whale loop pump → Shake out → Panic → Whale re-accumulate">🐋 Whale</button>
+    </div>
+    <div style="font-size:.58rem;color:var(--text2);line-height:1.5;margin:4px 0">Hover buttons for details. All sims include loop lending.</div>
+    <div class="trade-actions" id="simControls" style="display:none">
+      <button class="btn" style="background:var(--orange);color:#000;flex:1" onclick="pauseSim()" id="pauseBtn">⏸ Pause</button>
+      <button class="btn btn-reset" style="flex:1" onclick="stopSim()">⏹ Stop</button>
+    </div>
+    <div style="font-size:.65rem;color:var(--orange);font-weight:600;margin-top:4px" id="simStatus"></div>
+  </div>
+
+  <!-- Loop Lending — always visible -->
+  <div class="card">
+    <h3>Loop Lending</h3>
+    <div class="loan-row">
+      <div class="loan-chip"><span class="lk">Collateral</span><span class="lv cyan" id="l_col">0</span></div>
+      <div class="loan-chip"><span class="lk">Debt (MON)</span><span class="lv orange" id="l_debt">0</span></div>
+      <div class="loan-chip"><span class="lk">Pool Lendable</span><span class="lv mon" id="l_cap">0</span></div>
+      <div class="loan-chip"><span class="lk">Util Rate</span><span class="lv cyan" id="l_util">0%</span></div>
+    </div>
+    <div class="trade-input"><input type="number" id="loanAmt" placeholder="Tokens to collateralize" value="500000"></div>
+    <div class="trade-actions" style="margin-bottom:6px">
+      <button class="btn btn-borrow" onclick="doLend('borrow')">Collateralize</button>
+      <button class="btn btn-repay" onclick="doLend('repay')">Repay All</button>
+    </div>
+    <div class="trade-actions">
+      <button class="btn btn-scene" style="background:var(--accent)" onclick="doLoop(3)">Loop ×3</button>
+      <button class="btn btn-scene" style="background:var(--pink)" onclick="doLoop(5)">Loop ×5</button>
+      <button class="btn btn-scene" style="background:var(--orange);color:#000" onclick="doLoop(10)">Loop ×10</button>
+    </div>
+  </div>
+
+  <!-- Collapsible: Bonding Curve params -->
+  <details>
+    <summary>Bonding Curve Params</summary>
+    <div class="det-body">
+      <div class="param-row"><label>slope (m) ×10⁻¹⁰</label><input type="number" id="p_slope" value="80" min="1" max="1000" step="1" onchange="onP()"></div>
+      <div class="param-row"><label>floor price (MON)</label><input type="number" id="p_fp" value="0.001" min="0.0001" max="100" step="0.0001" onchange="onP()"></div>
+      <div class="param-row"><label>init supply</label><input type="number" id="p_supply" value="0" min="0" max="1e9" step="100000" onchange="onP()"></div>
+      <div class="param-row"><label>init liquidity (MON)</label><input type="number" id="p_liq" value="0" min="0" max="1e9" step="1000" onchange="onP()"></div>
+    </div>
+  </details>
+
+  <!-- Collapsible: MFR params -->
+  <details>
+    <summary>MFR (Auto Floor ↑)</summary>
+    <div class="det-body">
+      <div class="param-row"><label>threshold T (%)</label><input type="number" id="p_t" value="30" min="1" max="90" step="1" onchange="onP()"></div>
+      <div class="param-row"><label>move X (%)</label><input type="number" id="p_x" value="5" min="0.1" max="50" step="0.1" onchange="onP()"></div>
+      <div class="param-row"><label>T adjust C (%)</label><input type="number" id="p_c" value="2" min="0.1" max="20" step="0.1" onchange="onP()"></div>
+      <div class="param-row"><label>maxT (%)</label><input type="number" id="p_maxT" value="50" min="10" max="95" step="1" onchange="onP()"></div>
+      <div class="param-row"><label>minT (%)</label><input type="number" id="p_minT" value="20" min="1" max="90" step="1" onchange="onP()"></div>
+    </div>
+  </details>
+
+  <!-- Collapsible: Fees & Lending -->
+  <details>
+    <summary>Fees & Lending</summary>
+    <div class="det-body">
+      <div class="param-row"><label>buy fee (%)</label><input type="number" id="p_buyFee" value="1" min="0" max="20" step="0.1" onchange="onP()"></div>
+      <div class="param-row"><label>sell fee (%)</label><input type="number" id="p_sellFee" value="1.5" min="0" max="20" step="0.1" onchange="onP()"></div>
+      <div class="param-row"><label>borrow LTV (%)</label><input type="number" id="p_ltv" value="100" min="10" max="100" step="5" onchange="onP()"></div>
+      <div class="param-row"><label>borrow APR (%)</label><input type="number" id="p_apr" value="10" min="0" max="100" step="1" onchange="onP()"></div>
+    </div>
+  </details>
+
+</div>
+
+<!-- ====== MAIN ====== -->
+<div class="main">
+
+  <!-- Token Stats -->
+  <div class="dash-section">
+    <div class="dash-label">Token</div>
+    <div class="ticker">
+      <div class="ticker-item" title="Market Price — current price on bonding curve"><div class="tk">Price</div><div class="tv cyan" id="s_mp">—</div></div>
+      <div class="ticker-item" title="Floor Price — minimum guaranteed price, only goes up"><div class="tk">Floor</div><div class="tv green" id="s_fp">—</div></div>
+      <div class="ticker-item" title="Market Cap = Price × Supply"><div class="tk">MC</div><div class="tv" id="s_mc">—</div></div>
+      <div class="ticker-item" title="Floor Market Cap = Floor Price × Supply (guaranteed minimum MC)"><div class="tk">Floor MC</div><div class="tv green" id="s_fmc">—</div></div>
+      <div class="ticker-item" title="Total token supply in circulation"><div class="tk">Supply</div><div class="tv" id="s_supply">—</div></div>
+      <div class="ticker-item" title="Pool Total Value Locked — total MON in bonding curve pool"><div class="tk">TVL</div><div class="tv mon" id="s_liq">—</div></div>
+      <div class="ticker-item" title="Market Funding Ratio — % of pool that is market support (above floor)"><div class="tk">MFR</div><div class="tv orange" id="s_mfr">—</div></div>
+      <div class="ticker-item" title="Total system debt — MON borrowed from pool via loop lending"><div class="tk">Debt</div><div class="tv pink" id="s_debt">—</div></div>
+      <div class="ticker-item" title="Total cumulative trading volume in MON"><div class="tk">Vol</div><div class="tv" id="s_vol">—</div></div>
+      <div class="ticker-item" title="Total cumulative fees collected in MON"><div class="tk">Fees</div><div class="tv" id="s_fees">—</div></div>
+    </div>
+  </div>
+  <!-- My Position -->
+  <div class="dash-section">
+    <div class="dash-label">My Position</div>
+    <div class="ticker">
+      <div class="ticker-item" title="Your MON balance available for trading"><div class="tk">MON</div><div class="tv mon" id="s_bal">—</div></div>
+      <div class="ticker-item" title="Free tokens you hold (not collateralized)"><div class="tk">Tokens</div><div class="tv cyan" id="s_mytk">—</div></div>
+      <div class="ticker-item" title="Your tokens locked as collateral"><div class="tk">Locked</div><div class="tv orange" id="s_mylk">—</div></div>
+      <div class="ticker-item" title="Your outstanding MON debt from loop lending"><div class="tk">My Debt</div><div class="tv pink" id="s_mydebt">—</div></div>
+      <div class="ticker-item" title="Token value at market price = (free + locked) × market price"><div class="tk">Token Val</div><div class="tv" id="s_tval">—</div></div>
+      <div class="ticker-item" title="Net Worth = MON Balance + Token Value - My Debt"><div class="tk">Net Worth</div><div class="tv" id="s_nw" style="color:var(--green)">—</div></div>
+    </div>
+  </div>
+
+  <!-- MFR bar -->
+  <div class="card" style="padding:6px 10px;margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <h3 style="margin:0">MFR</h3>
+      <span style="font-size:.65rem;color:var(--orange)" id="mfrThreshLabel">T = 30%</span>
+    </div>
+    <div class="mfr-bar-outer">
+      <div class="mfr-bar-inner" id="mfrBar" style="width:0%;background:linear-gradient(90deg,var(--green),var(--orange),var(--red))"></div>
+      <div class="mfr-bar-threshold" id="mfrThresh" style="left:30%" data-label="T=30%"></div>
+      <div class="mfr-val" id="mfrVal">0%</div>
+    </div>
+    <div class="mfr-labels"><span>0%</span><span>100%</span></div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="card"><span class="chart-title" title="Market Price (cyan) vs Floor Price (green, dashed) — Floor Price only goes up via MFR mechanism">Price (MON)</span><div class="chart-wrap"><canvas id="cPrice"></canvas></div></div>
+    <div class="card"><span class="chart-title" title="Total = all MON in pool. Floor Support = floor price × supply (locked). Market Support = Total - Floor (available for lending & price discovery)">Liquidity (MON)</span><div class="chart-wrap"><canvas id="cLiq"></canvas></div></div>
+  </div>
+  <div class="charts-grid">
+    <div class="card"><span class="chart-title" title="MFR% (orange) = Market Support / Total Liquidity. When MFR exceeds threshold T, floor price auto-increases. FP (green) = Floor Price">MFR & Floor Price</span><div class="chart-wrap"><canvas id="cMFR"></canvas></div></div>
+    <div class="card"><span class="chart-title" title="Debt (pink) = total MON borrowed from pool. Collateral (cyan) = total tokens locked. Util% (orange dashed) = Debt / (Debt + Lendable)">Lending</span><div class="chart-wrap"><canvas id="cLoan"></canvas></div></div>
+  </div>
+  <div class="card" style="padding:8px 10px"><h3 style="margin-bottom:3px">Log</h3><div class="log-area" id="logArea"><div class="log-entry" style="color:var(--text2)">Ready — buy tokens with MON, then leverage via loop lending.</div></div></div>
+</div>
+</div>
+
+<script>
+// === STATE ===
+let S={},H={},logs=[],step=0;
+function gp(id){return parseFloat(document.getElementById(id).value)}
+function initH(){return{mp:[],fp:[],supply:[],liqTotal:[],liqFloor:[],liqMarket:[],mfr:[],debt:[],collateral:[],util:[]}}
+function initState(){
+  const m=gp('p_slope')*1e-10;
+  S={m,fp:gp('p_fp'),supply:gp('p_supply'),liq:gp('p_liq'),
+    tMFR:gp('p_t')/100,xMFR:gp('p_x')/100,cMFR:gp('p_c')/100,
+    maxT:gp('p_maxT')/100,minT:gp('p_minT')/100,
+    buyFee:gp('p_buyFee')/100,sellFee:gp('p_sellFee')/100,
+    ltv:gp('p_ltv')/100,apr:gp('p_apr')/100,
+    collateral:0,sysCollateral:0,debt:0,userDebt:0,userTokens:0,userMON:1000000,blocksSinceMFR:0,totalFees:0,totalVol:0};
+  H=initH();logs=[];stepMap={};step=0;record();updateUI();
+}
+
+// === PRICE FIELD ===
+function _x1(fp,m){return(2*fp-fp*.01)/m}
+function _x2(fp,m){return _x1(fp,m)+2/m}
+function _c1(fp,m){return _x1(fp,m)+1/m}
+function _k(fp,m){return _x2(fp,m)*m-fp}
+function price(x,fp,m){
+  if(x<=0)return fp;
+  const x1=_x1(fp,m),x2=_x2(fp,m),c1=_c1(fp,m),k=_k(fp,m);
+  if(x<=x1)return fp;
+  if(x<=x2){if(x<c1)return((1-(c1-x)*m)*k)/2+fp;return(((x-c1)*m+1)*k)/2+fp}
+  return x*m;
+}
+function integrate(sx,amt,fp,m){
+  const n=Math.max(80,Math.min(600,Math.floor(amt/5000))),dx=amt/n;let t=0;
+  for(let i=0;i<n;i++){const a=sx+i*dx,b=sx+(i+1)*dx;t+=(price(a,fp,m)+price(b,fp,m))/2*dx}return t;
+}
+
+// === LIQUIDITY & MFR ===
+function getLiq(){const t=S.liq,fs=S.fp*S.supply,ms=Math.max(0,t-fs);return{total:t,floorSup:fs,mktSup:ms,mfr:t>0?ms/t:0}}
+function autoUpFP(){
+  const{floorSup,mktSup,mfr}=getLiq();
+  if(mfr>S.tMFR&&S.supply>0){const u=mktSup*S.xMFR,nf=(floorSup+u)/S.supply;if(nf>S.fp){S.fp=nf;log(`MFR → FP=${fmtP(S.fp)} MON, T=${(S.tMFR*100).toFixed(1)}%`,'mfr')}S.tMFR=Math.min(S.tMFR+S.cMFR,S.maxT);S.blocksSinceMFR=0}
+  else{S.blocksSinceMFR++;if(S.blocksSinceMFR>=3)S.tMFR=Math.max(S.tMFR-S.cMFR,S.minT)}
+}
+
+// === TRADING ===
+function doTrade(side){
+  const amt=parseFloat(document.getElementById('tradeAmt').value);if(!amt||amt<=0)return;
+  if(side==='buy'){const c=integrate(S.supply,amt,S.fp,S.m),f=c*S.buyFee,t=c+f;if(S.userMON<t){log(`Not enough MON (need ${fmt(t)}, have ${fmt(S.userMON)})`,'sell');return}S.supply+=amt;S.liq+=c;S.totalFees+=f;S.totalVol+=c;S.userTokens+=amt;S.userMON-=t;log(`BUY ${fmt(amt)} @ ${fmtP(c/amt)} | Cost ${fmt(t)} MON`,'buy');autoUpFP()}
+  else{const free=S.userTokens,sa=Math.min(amt,free,S.supply);if(sa<=0){log('No tokens to sell','sell');return}const p=integrate(S.supply-sa,sa,S.fp,S.m),f=p*S.sellFee,n=p-f;if(n>S.liq){log('Insufficient liquidity','sell');return}S.supply-=sa;S.liq-=p;S.totalFees+=f;S.totalVol+=p;S.userTokens-=sa;S.userMON+=n;log(`SELL ${fmt(sa)} @ ${fmtP(p/sa)} | Recv ${fmt(n)} MON`,'sell');autoUpFP()}
+  record();updateUI();
+}
+
+// === LENDING ===
+// Borrowed MON comes FROM the pool liquidity (market support portion only).
+// Floor support (fp * supply) is untouchable — it guarantees the floor price.
+// Available to lend = pool liquidity - floor support - existing debt already lent out
+function poolLendable(){return Math.max(0, S.liq - S.fp*S.supply - S.debt)}
+function borrowCap(){return Math.min(S.collateral*S.fp*S.ltv, S.debt+poolLendable())}
+function hf(){if(S.debt<=0)return Infinity;return(S.collateral+S.sysCollateral)*S.fp*S.ltv/S.debt}
+function doLend(a){
+  if(a==='borrow'){
+    const t=parseFloat(document.getElementById('loanAmt').value);if(!t||t<=0)return;
+    const ac=Math.min(t,S.userTokens);if(ac<=0){log('No free tokens','borrow');return}
+    S.userTokens-=ac;S.collateral+=ac;S.sysCollateral+=ac;
+    const maxBorrow=ac*S.fp*S.ltv;
+    const avail=poolLendable();
+    const mb=Math.min(maxBorrow,avail);
+    if(mb<=0){log(`Pool has no lendable MON (market support exhausted)`,'sell');S.userTokens+=ac;S.collateral-=ac;S.sysCollateral-=ac;return}
+    S.debt+=mb;S.userDebt+=mb;S.liq-=mb;S.userMON+=mb;
+    log(`LOCK ${fmt(ac)} → BORROW ${fmt(mb)} MON from pool (lendable: ${fmt(avail)})`,'borrow');
+  } else {
+    if(S.userDebt<=0){log('No debt','repay');return}
+    if(S.userMON<S.userDebt){log(`Need ${fmt(S.userDebt)} MON, have ${fmt(S.userMON)}`,'repay');return}
+    S.userMON-=S.userDebt;S.liq+=S.userDebt;S.debt-=S.userDebt;
+    log(`REPAY ${fmt(S.userDebt)} MON → pool | UNLOCK ${fmt(S.collateral)} tokens`,'repay');
+    S.sysCollateral-=S.collateral;S.userTokens+=S.collateral;S.userDebt=0;S.collateral=0;
+  }
+  record();updateUI();
+}
+function doLoop(n){
+  // Loop requires: user must already hold free tokens to collateralize
+  // Step 0 is NOT an auto-buy — user must Buy first, then Loop leverages existing position
+  if(S.userTokens<=0){log('No tokens to loop — Buy first, then Loop','sell');return}
+  log(`═══ LOOP ×${n} START (leveraging ${fmt(S.userTokens)} free tokens) ═══`,'mfr');
+
+  let lt=S.userTokens; // tokens available for this round
+  for(let i=1;i<=n;i++){
+    // 1. Collateralize free tokens
+    const ca=Math.min(lt,S.userTokens);
+    if(ca<=0){log(`[${i}] No tokens left, stopping`,'mfr');break}
+    S.userTokens-=ca;S.collateral+=ca;S.sysCollateral+=ca;
+    const maxBorrow=ca*S.fp*S.ltv;
+    const lendable=poolLendable();
+    const mb=Math.min(maxBorrow,lendable);
+    if(mb<=0){log(`[${i}] Pool has no lendable MON, stopping`,'mfr');S.userTokens+=ca;S.collateral-=ca;S.sysCollateral-=ca;break}
+    S.debt+=mb;S.userDebt+=mb;S.liq-=mb;S.userMON+=mb;
+    log(`[${i}] LOCK ${fmt(ca)} → BORROW ${fmt(mb)} MON (FP=${fmtP(S.fp)}, pool lendable: ${fmt(lendable)})`,'borrow');
+
+    // 2. Buy tokens with borrowed MON
+    const avail=Math.min(mb,S.userMON);
+    if(avail<=1e-10){log(`[${i}] No MON to buy, stopping`,'mfr');break}
+    // estimate how many tokens we can buy with avail MON
+    const mp=price(S.supply,S.fp,S.m);
+    let et=Math.floor(avail/(mp*(1+S.buyFee))*.95);
+    if(et<=0)break;
+    // refine: ensure cost+fee <= avail
+    let co=integrate(S.supply,et,S.fp,S.m),fe=co*S.buyFee;
+    if(co+fe>avail){const r=avail/(co+fe);et=Math.floor(et*r*.99);if(et<=0)break;co=integrate(S.supply,et,S.fp,S.m);fe=co*S.buyFee}
+    S.supply+=et;S.liq+=co;S.totalFees+=fe;S.userTokens+=et;S.userMON-=(co+fe);
+    lt=et; // next round will collateralize what we just bought
+    log(`[${i}] BUY ${fmt(et)} @ ${fmtP(co/et)} | Spent ${fmt(co+fe)} MON`,'buy');
+    autoUpFP();record();updateUI();
+  }
+  const h=hf(),tt=S.userTokens+S.collateral,mp2=price(S.supply,S.fp,S.m),tv=tt*mp2;
+  const nw=S.userMON+tv-S.debt;
+  log(`═══ DONE | Tokens: ${fmt(tt)} (${fmt(tv)} MON) | Debt: ${fmt(S.debt)} | Net: ${fmt(nw)} | HF: ${h===Infinity?'∞':h.toFixed(2)} ═══`,'mfr');
+  record();updateUI();
+}
+
+// === AUTO SIM ENGINE ===
+let simRunning=false,simPaused=false;
+function stopSim(){simRunning=false;simPaused=false;simUI(false,'')}
+function pauseSim(){
+  simPaused=!simPaused;
+  document.getElementById('pauseBtn').textContent=simPaused?'▶ Resume':'⏸ Pause';
+  document.getElementById('pauseBtn').style.background=simPaused?'var(--green)':'var(--orange)';
+  document.getElementById('simStatus').textContent=simPaused?'Paused':'Running...';
+}
+function simUI(on,label){
+  simRunning=on;simPaused=false;
+  document.getElementById('simControls').style.display=on?'flex':'none';
+  document.getElementById('pauseBtn').textContent='⏸ Pause';
+  document.getElementById('pauseBtn').style.background='var(--orange)';
+  document.getElementById('simStatus').textContent=on?'Running: '+label:'';
+}
+async function autoSim(type){
+  if(simRunning)return;
+  reset();
+  const label={launch:'🚀 Launch',mature:'📈 Mature',crash:'💥 Crash',leverage:'🔄 Leverage',full:'🎲 Full Cycle',whale:'🐋 Whale'}[type];
+  simUI(true,label);
+  log(`═══ AUTO SIM: ${label} ═══`,'mfr');
+
+  S.userMON=10000000;
+  // delay with pause support
+  const delay=()=>new Promise(async resolve=>{
+    await new Promise(r=>setTimeout(r,200)); // base delay — slower
+    while(simPaused&&simRunning) await new Promise(r=>setTimeout(r,100)); // wait while paused
+    resolve();
+  });
+
+  if(type==='launch'){
+    log('── Seed buyers ──','mfr');
+    for(let i=0;i<10&&simRunning;i++){doBuy(rnd(100000,500000));await delay()}
+    log('── FOMO wave 1 ──','mfr');
+    for(let i=0;i<20&&simRunning;i++){doBuy(rnd(500000,3000000));await delay()}
+    log('── Early loopers ──','mfr');
+    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(500000,1500000),3,false);await delay()}
+    log('── Profit taking ──','mfr');
+    for(let i=0;i<10&&simRunning;i++){doSell(rnd(200000,800000));await delay()}
+    log('── Second wave + loops ──','mfr');
+    for(let i=0;i<12&&simRunning;i++){
+      if(Math.random()<0.7) doBuy(rnd(300000,2000000));
+      else doSimLoop(rnd(300000,1000000),2,false);
+      await delay();
+    }
+    log('── Consolidation ──','mfr');
+    for(let i=0;i<8&&simRunning;i++){
+      if(Math.random()<0.45) doBuy(rnd(200000,1000000));
+      else doSell(rnd(150000,700000));
+      await delay();
+    }
+  }
+  else if(type==='mature'){
+    for(let i=0;i<100&&simRunning;i++){
+      const r=Math.random();
+      if(r<0.40) doBuy(rnd(200000,1500000));
+      else if(r<0.65) doSell(rnd(100000,800000));
+      else if(r<0.80) doSimLoop(rnd(300000,1000000),2,Math.random()<0.5);
+      else if(r<0.90) doBuy(rnd(2000000,5000000));
+      else doSell(rnd(1000000,3000000));
+      await delay();
+    }
+  }
+  else if(type==='crash'){
+    log('── Pump + leverage ──','mfr');
+    for(let i=0;i<16&&simRunning;i++){doBuy(rnd(500000,3000000));await delay()}
+    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(500000,2000000),3,false);await delay()}
+    log('── Peak ──','mfr');
+    for(let i=0;i<6&&simRunning;i++){doSell(rnd(300000,1000000));await delay()}
+    log('── Panic: sells + forced repays ──','mfr');
+    for(let i=0;i<40&&simRunning;i++){
+      const r=Math.random();
+      if(r<0.6) doSell(rnd(500000,2000000));
+      else if(r<0.8) doSimLoop(rnd(200000,600000),1,true);
+      else doBuy(rnd(100000,500000));
+      await delay();
+    }
+  }
+  else if(type==='leverage'){
+    log('── Accumulation ──','mfr');
+    for(let i=0;i<16&&simRunning;i++){doBuy(rnd(500000,2000000));await delay()}
+    log('── Leverage wave 1: aggressive loopers ──','mfr');
+    for(let i=0;i<8&&simRunning;i++){doSimLoop(rnd(500000,2000000),rnd(3,5),false);await delay()}
+    log('── Organic trading ──','mfr');
+    for(let i=0;i<12&&simRunning;i++){
+      if(Math.random()<0.55) doBuy(rnd(200000,1000000));
+      else doSell(rnd(100000,500000));
+      await delay();
+    }
+    log('── Leverage wave 2: conservative (repay after) ──','mfr');
+    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(300000,1000000),2,true);await delay()}
+    log('── Leverage wave 3: mixed ──','mfr');
+    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(400000,1500000),rnd(2,4),Math.random()<0.4);await delay()}
+    log('── Cooldown ──','mfr');
+    for(let i=0;i<12&&simRunning;i++){
+      if(Math.random()<0.4) doBuy(rnd(200000,800000));
+      else doSell(rnd(100000,600000));
+      await delay();
+    }
+  }
+  else if(type==='whale'){
+    log('── Retail base ──','mfr');
+    for(let i=0;i<16&&simRunning;i++){doBuy(rnd(200000,800000));await delay()}
+    log('── 🐋 Whale loop leverage ──','mfr');
+    doSimLoop(rnd(5000000,10000000),5,false);await delay();
+    for(let i=0;i<4&&simRunning;i++){doBuy(rnd(3000000,8000000));await delay()}
+    log('── 🐋 Shake out ──','mfr');
+    for(let i=0;i<12&&simRunning;i++){doSell(rnd(500000,2000000));await delay()}
+    log('── Retail panic sell ──','mfr');
+    for(let i=0;i<8&&simRunning;i++){doSell(rnd(200000,1000000));await delay()}
+    log('── 🐋 Re-accumulation with loops ──','mfr');
+    doSimLoop(rnd(3000000,6000000),3,false);await delay();
+    for(let i=0;i<6&&simRunning;i++){doBuy(rnd(2000000,5000000));await delay()}
+    log('── Organic recovery ──','mfr');
+    for(let i=0;i<10&&simRunning;i++){
+      if(Math.random()<0.6) doBuy(rnd(300000,1500000));
+      else doSell(rnd(200000,800000));
+      await delay();
+    }
+    log('── Late retail FOMO ──','mfr');
+    for(let i=0;i<8&&simRunning;i++){doBuy(rnd(500000,2500000));await delay()}
+  }
+  else if(type==='full'){
+    log('── Phase 1: Launch ──','mfr');
+    for(let i=0;i<12&&simRunning;i++){doBuy(rnd(300000,1500000));await delay()}
+
+    log('── Phase 2: Growth + Loop Leverage ──','mfr');
+    for(let i=0;i<24&&simRunning;i++){
+      const r=Math.random();
+      if(r<0.45) doBuy(rnd(500000,2500000));
+      else if(r<0.65) doSell(rnd(200000,800000));
+      else if(r<0.85) doSimLoop(rnd(300000,1500000),rnd(2,4),false);
+      else doBuy(rnd(3000000,6000000));
+      await delay();
+    }
+
+    log('── Phase 3: Correction + Forced Repays ──','mfr');
+    for(let i=0;i<20&&simRunning;i++){
+      const r=Math.random();
+      if(r<0.5) doSell(rnd(300000,1500000));
+      else if(r<0.75) doSimLoop(rnd(200000,500000),1,true);
+      else doBuy(rnd(200000,800000));
+      await delay();
+    }
+
+    log('── Phase 4: Recovery ──','mfr');
+    for(let i=0;i<16&&simRunning;i++){
+      if(Math.random()<0.65) doBuy(rnd(400000,2000000));
+      else doSell(rnd(200000,1000000));
+      await delay();
+    }
+
+    log('── Phase 5: Maturity (mixed with loops) ──','mfr');
+    for(let i=0;i<24&&simRunning;i++){
+      const r=Math.random();
+      if(r<0.35) doBuy(rnd(300000,1200000));
+      else if(r<0.60) doSell(rnd(200000,1000000));
+      else if(r<0.80) doSimLoop(rnd(200000,800000),2,Math.random()<0.6);
+      else doBuy(rnd(2000000,5000000));
+      await delay();
+    }
+  }
+
+  const mp=price(S.supply,S.fp,S.m);
+  log(`═══ SIM DONE | Price: ${fmtP(mp)} | FP: ${fmtP(S.fp)} | Supply: ${fmt(S.supply)} | Pool: ${fmt(S.liq)} ═══`,'mfr');
+  simUI(false,'');
+}
+
+// === Sim Helpers — external traders (don't touch user balance) ===
+function rnd(min,max){return Math.floor(min+Math.random()*(max-min))}
+
+function doBuy(amt){
+  const c=integrate(S.supply,amt,S.fp,S.m),f=c*S.buyFee;
+  S.supply+=amt;S.liq+=c;S.totalFees+=f;S.totalVol+=c;
+  log(`BUY ${fmt(amt)} @ ${fmtP(c/amt)}`,'buy');
+  autoUpFP();record();updateUI();
+}
+
+function doSell(amt){
+  const sa=Math.min(amt,S.supply);if(sa<=0)return;
+  const p=integrate(S.supply-sa,sa,S.fp,S.m),f=p*S.sellFee,n=p-f;
+  if(n>S.liq)return;
+  S.supply-=sa;S.liq-=p;S.totalFees+=f;S.totalVol+=p;
+  log(`SELL ${fmt(sa)} @ ${fmtP(p/sa)}`,'sell');
+  autoUpFP();record();updateUI();
+}
+
+// Simulate an external user doing a full loop cycle:
+//   buy → (collateralize → borrow from pool → buy more) × rounds → hold or repay
+// All debt is tracked in S.debt in real-time so charts reflect it.
+function doSimLoop(initBuyAmt, rounds, repayAfter){
+  // Phase 1: initial buy
+  const c0=integrate(S.supply,initBuyAmt,S.fp,S.m),f0=c0*S.buyFee;
+  S.supply+=initBuyAmt;S.liq+=c0;S.totalFees+=f0;
+  log(`[SimLoop] BUY ${fmt(initBuyAmt)} @ ${fmtP(c0/initBuyAmt)}`,'buy');
+  autoUpFP();record();updateUI();
+
+  let extTokens=initBuyAmt, extCollateral=0, extDebt=0;
+
+  // Phase 2: loop rounds
+  for(let i=1;i<=rounds;i++){
+    const ca=extTokens;if(ca<=0)break;
+    extCollateral+=ca;S.sysCollateral+=ca;extTokens=0;
+    const maxB=ca*S.fp*S.ltv;
+    const lendable=poolLendable();
+    const mb=Math.min(maxB,lendable);
+    if(mb<=0){log(`[SimLoop ${i}] Pool exhausted`,'mfr');S.sysCollateral-=ca;extCollateral-=ca;extTokens=ca;break}
+    extDebt+=mb;S.debt+=mb;S.liq-=mb;
+    log(`[SimLoop ${i}] LOCK ${fmt(ca)} → BORROW ${fmt(mb)} MON`,'borrow');
+    record();updateUI();
+
+    // buy with borrowed MON
+    const mp=price(S.supply,S.fp,S.m);
+    let et=Math.floor(mb/(mp*(1+S.buyFee))*.95);
+    if(et<=0)break;
+    let co=integrate(S.supply,et,S.fp,S.m),fe=co*S.buyFee;
+    if(co+fe>mb){const r=mb/(co+fe);et=Math.floor(et*r*.99);if(et<=0)break;co=integrate(S.supply,et,S.fp,S.m);fe=co*S.buyFee}
+    S.supply+=et;S.liq+=co;S.totalFees+=fe;S.totalVol+=co;
+    extTokens+=et;
+    log(`[SimLoop ${i}] BUY ${fmt(et)} @ ${fmtP(co/et)}`,'buy');
+    autoUpFP();record();updateUI();
+  }
+
+  // Phase 3: repay or hold
+  if(repayAfter && extDebt>0){
+    // sell tokens to cover debt, then repay
+    const mp=price(S.supply,S.fp,S.m);
+    const tokensToSell=Math.ceil(extDebt/(mp*(1-S.sellFee))*1.05);
+    const sellAmt=Math.min(tokensToSell,extTokens,S.supply);
+    if(sellAmt>0){
+      const p=integrate(S.supply-sellAmt,sellAmt,S.fp,S.m),fe=p*S.sellFee,net=p-fe;
+      S.supply-=sellAmt;S.liq-=p;S.totalFees+=fe;extTokens-=sellAmt;
+      log(`[SimLoop] SELL ${fmt(sellAmt)} to repay → ${fmt(net)} MON`,'sell');
+      const repayAmt=Math.min(extDebt,net);
+      S.liq+=repayAmt;S.debt-=repayAmt;extDebt-=repayAmt;
+      if(extDebt>0){S.liq+=extDebt;S.debt-=extDebt;extDebt=0}
+      S.sysCollateral-=extCollateral;extTokens+=extCollateral;extCollateral=0;
+      log(`[SimLoop] REPAY → pool | debt cleared`,'repay');
+      autoUpFP();record();updateUI();
+    }
+  } else if(extDebt>0){
+    // hold leveraged — debt already in S.debt
+    log(`[SimLoop] HOLD ${fmt(extCollateral+extTokens)} tokens, ${fmt(extDebt)} debt`,'borrow');
+    record();updateUI();
+  }
+}
+
+// === HISTORY & UI ===
+function record(){const{total,floorSup,mktSup,mfr}=getLiq();step++;H.mp.push(price(S.supply,S.fp,S.m));H.fp.push(S.fp);H.supply.push(S.supply);H.liqTotal.push(total);H.liqFloor.push(floorSup);H.liqMarket.push(mktSup);H.mfr.push(mfr*100);H.debt.push(S.debt);
+  H.collateral.push(S.collateral+S.sysCollateral);
+  // utilization = debt / (debt + lendable) — how much of market support is lent out
+  const lendable=poolLendable();H.util.push(S.debt+lendable>0?S.debt/(S.debt+lendable)*100:0)}
+function fmt(n){if(n==null)return'—';const a=Math.abs(n);if(a>=1e9)return(n/1e9).toFixed(2)+'B';if(a>=1e6)return(n/1e6).toFixed(2)+'M';if(a>=1e3)return(n/1e3).toFixed(1)+'K';return n.toFixed(2)}
+function fmtP(n){return n<.001?n.toExponential(2):n<1?n.toFixed(4):n<1e3?n.toFixed(3):fmt(n)}
+function updateUI(){
+  const{total,floorSup,mktSup,mfr}=getLiq(),mp=price(S.supply,S.fp,S.m);
+  const mc=mp*S.supply; // Market Cap = price × supply
+  const fmc=S.fp*S.supply; // Floor MC = floor price × supply
+  const tokenVal=(S.userTokens+S.collateral)*mp;
+  const netWorth=S.userMON+tokenVal-S.userDebt;
+
+  // Token section
+  document.getElementById('s_mp').textContent=fmtP(mp);
+  document.getElementById('s_fp').textContent=fmtP(S.fp);
+  document.getElementById('s_mc').textContent=fmt(mc);
+  document.getElementById('s_fmc').textContent=fmt(fmc);
+  document.getElementById('s_supply').textContent=fmt(S.supply);
+  document.getElementById('s_liq').textContent=fmt(total);
+  document.getElementById('s_mfr').textContent=(mfr*100).toFixed(1)+'%';
+  document.getElementById('s_debt').textContent=fmt(S.debt);
+  document.getElementById('s_vol').textContent=fmt(S.totalVol);
+  document.getElementById('s_fees').textContent=fmt(S.totalFees);
+  // My Position section
+  document.getElementById('s_bal').textContent=fmt(S.userMON);
+  document.getElementById('s_mytk').textContent=fmt(S.userTokens);
+  document.getElementById('s_mylk').textContent=fmt(S.collateral);
+  document.getElementById('s_mydebt').textContent=fmt(S.userDebt);
+  document.getElementById('s_tval').textContent=fmt(tokenVal);
+  document.getElementById('s_nw').textContent=fmt(netWorth);
+  document.getElementById('s_nw').style.color=netWorth>=1000000?'var(--green)':netWorth>=0?'var(--orange)':'var(--red)';
+
+  const mfrPct=Math.min(100,mfr*100),tPct=(S.tMFR*100);
+  document.getElementById('mfrBar').style.width=mfrPct+'%';
+  document.getElementById('mfrThresh').style.left=tPct+'%';
+  document.getElementById('mfrThresh').setAttribute('data-label','T='+tPct.toFixed(1)+'%');
+  document.getElementById('mfrThreshLabel').textContent='T='+tPct.toFixed(1)+'%';
+  document.getElementById('mfrVal').textContent=mfrPct.toFixed(1)+'%';
+
+  const totalCol=S.collateral+S.sysCollateral;
+  document.getElementById('l_col').textContent=fmt(totalCol);
+  document.getElementById('l_debt').textContent=fmt(S.debt);
+  const lendable=poolLendable();
+  document.getElementById('l_cap').textContent=fmt(lendable);
+  const utilRate=S.debt+lendable>0?S.debt/(S.debt+lendable)*100:0;
+  document.getElementById('l_util').textContent=utilRate.toFixed(1)+'%';
+  updCharts();
+}
+// stepMap[stepIndex] = index into logs[] for that step's first log
+let stepMap={};
+function log(msg,cls){
+  const idx=logs.length;
+  logs.unshift({msg,cls,step:step});
+  if(!stepMap[step])stepMap[step]=idx;
+  const area=document.getElementById('logArea');
+  area.innerHTML=logs.slice(0,200).map((l,i)=>`<div class="log-entry" id="log-${i}" data-step="${l.step}" onclick="focusChartsOnStep(${l.step})" style="cursor:pointer"><span style="color:var(--text2);opacity:.4;margin-right:4px">${l.step}</span><span style="color:var(--${l.cls==='buy'?'green':l.cls==='sell'?'red':l.cls==='borrow'?'orange':l.cls==='repay'?'mon':l.cls==='mfr'?'orange':'text2'})">[${l.cls.toUpperCase()}]</span> ${l.msg}</div>`).join('');
+}
+// Scroll log to a specific step (called from chart hover)
+function scrollLogToStep(stepIdx){
+  const area=document.getElementById('logArea');
+  const entries=area.querySelectorAll('.log-entry');
+  entries.forEach(e=>e.style.background='');
+  for(const e of entries){
+    if(parseInt(e.dataset.step)===stepIdx){
+      e.style.background='rgba(132,94,247,.15)';
+      e.scrollIntoView({block:'center',behavior:'smooth'});
+      break;
+    }
+  }
+}
+// Click log → show tooltip on all charts at that step
+function focusChartsOnStep(stepIdx){
+  // highlight the log entry
+  scrollLogToStep(stepIdx);
+  // dataIndex is step-1 (step is 1-indexed, chart data is 0-indexed)
+  const dataIndex=stepIdx-1;
+  if(dataIndex<0)return;
+  [cPrice,cLiq,cMFR,cLoan].forEach(ch=>{
+    if(!ch||!ch.data.labels||dataIndex>=ch.data.labels.length)return;
+    const meta=ch.getDatasetMeta(0);
+    if(!meta||!meta.data||!meta.data[dataIndex])return;
+    const pt=meta.data[dataIndex];
+    ch.tooltip.setActiveElements([{datasetIndex:0,index:dataIndex}],{x:pt.x,y:pt.y});
+    ch.setActiveElements([{datasetIndex:0,index:dataIndex}]);
+    ch.update('none');
+  });
+}
+
+// === CHARTS ===
+let cPrice,cLiq,cMFR,cLoan;
+function mkCharts(){
+  const pt={pointRadius:0,pointHitRadius:20,pointHoverRadius:5,pointHoverBorderWidth:2};
+  const inter={interaction:{mode:'index',intersect:false,axis:'x'},hover:{mode:'index',intersect:false},
+    plugins:{legend:{labels:{color:'#7b7f97',font:{size:9},boxWidth:10}},tooltip:{mode:'index',intersect:false,backgroundColor:'rgba(18,20,31,.95)',titleColor:'#e4e7f1',bodyColor:'#7b7f97',borderColor:'#1f2235',borderWidth:1,padding:7,cornerRadius:5,displayColors:true,boxPadding:2,titleFont:{size:10},bodyFont:{size:10},
+      callbacks:{label:ctx=>{let v=ctx.parsed.y;return ctx.dataset.label+': '+(v==null?'∞':v<.01&&v>0?v.toExponential(2):fmt(v))}}},crosshair:{}}};
+  const sc={x:{ticks:{color:'#7b7f97',font:{size:8},maxTicksLimit:10},grid:{color:'#1a1d2e'}},y:{ticks:{color:'#7b7f97',font:{size:8}},grid:{color:'#1a1d2e'}}};
+  Chart.register({id:'crosshair',afterDraw(ch){const tt=ch.tooltip;if(!tt||!tt.caretX)return;const ctx=ch.ctx;ctx.save();ctx.beginPath();ctx.setLineDash([3,3]);ctx.moveTo(tt.caretX,ch.scales.y.top);ctx.lineTo(tt.caretX,ch.scales.y.bottom);ctx.lineWidth=1;ctx.strokeStyle='rgba(123,127,151,.3)';ctx.stroke();ctx.restore()}});
+  // Plugin: sync chart hover → log scroll
+  Chart.register({id:'logSync',afterEvent(ch,args){
+    const evt=args.event;if(evt.type!=='mousemove')return;
+    const tt=ch.tooltip;if(!tt||!tt.dataPoints||!tt.dataPoints.length)return;
+    const idx=tt.dataPoints[0].dataIndex;
+    scrollLogToStep(idx+1); // step is 1-indexed
+  }});
+
+  cPrice=new Chart(document.getElementById('cPrice'),{type:'line',data:{labels:[],datasets:[
+    {label:'Market',borderColor:'#22d3ee',backgroundColor:'rgba(34,211,238,.08)',fill:true,data:[],tension:.3,borderWidth:1.5,pointHoverBackgroundColor:'#22d3ee',...pt},
+    {label:'Floor',borderColor:'#34d399',borderDash:[5,3],data:[],tension:0,borderWidth:1.5,pointHoverBackgroundColor:'#34d399',...pt}]},
+    options:{responsive:true,maintainAspectRatio:false,...inter,scales:{...sc,y:{...sc.y,title:{display:true,text:'MON',color:'#7b7f97',font:{size:9}}}}}});
+
+  cLiq=new Chart(document.getElementById('cLiq'),{type:'line',data:{labels:[],datasets:[
+    {label:'Total',borderColor:'#845ef7',data:[],tension:.3,borderWidth:1.5,pointHoverBackgroundColor:'#845ef7',...pt},
+    {label:'Floor',borderColor:'#34d399',backgroundColor:'rgba(52,211,153,.12)',fill:true,data:[],tension:.3,borderWidth:1.5,pointHoverBackgroundColor:'#34d399',...pt},
+    {label:'Market',borderColor:'#22d3ee',backgroundColor:'rgba(34,211,238,.08)',fill:true,data:[],tension:.3,borderWidth:1.5,pointHoverBackgroundColor:'#22d3ee',...pt}]},
+    options:{responsive:true,maintainAspectRatio:false,...inter,scales:sc}});
+
+  cMFR=new Chart(document.getElementById('cMFR'),{type:'line',data:{labels:[],datasets:[
+    {label:'MFR%',borderColor:'#fbbf24',data:[],tension:.3,borderWidth:1.5,yAxisID:'y',pointHoverBackgroundColor:'#fbbf24',...pt},
+    {label:'FP',borderColor:'#34d399',data:[],tension:.3,borderWidth:1.5,yAxisID:'y1',pointHoverBackgroundColor:'#34d399',...pt}]},
+    options:{responsive:true,maintainAspectRatio:false,...inter,scales:{x:sc.x,y:{...sc.y,position:'left',title:{display:true,text:'MFR%',color:'#fbbf24',font:{size:9}}},y1:{...sc.y,position:'right',title:{display:true,text:'FP',color:'#34d399',font:{size:9}},grid:{drawOnChartArea:false}}}}});
+
+  cLoan=new Chart(document.getElementById('cLoan'),{type:'line',data:{labels:[],datasets:[
+    {label:'Debt (MON)',borderColor:'#f472b6',backgroundColor:'rgba(244,114,182,.1)',fill:true,data:[],tension:.3,borderWidth:1.5,yAxisID:'y',pointHoverBackgroundColor:'#f472b6',...pt},
+    {label:'Collateral (tokens)',borderColor:'#22d3ee',data:[],tension:.3,borderWidth:1.5,yAxisID:'y1',pointHoverBackgroundColor:'#22d3ee',...pt},
+    {label:'Util %',borderColor:'#f59e0b',borderDash:[4,3],data:[],tension:.3,borderWidth:1.5,yAxisID:'y2',pointHoverBackgroundColor:'#f59e0b',...pt}]},
+    options:{responsive:true,maintainAspectRatio:false,...inter,scales:{x:sc.x,
+      y:{...sc.y,position:'left',title:{display:true,text:'Debt (MON)',color:'#f472b6',font:{size:9}}},
+      y1:{...sc.y,position:'right',title:{display:true,text:'Collateral',color:'#22d3ee',font:{size:9}},grid:{drawOnChartArea:false}},
+      y2:{display:false}}}});
+}
+function updCharts(){
+  const lb=H.mp.map((_,i)=>i);
+  cPrice.data.labels=lb;cPrice.data.datasets[0].data=H.mp;cPrice.data.datasets[1].data=H.fp;cPrice.update('none');
+  cLiq.data.labels=lb;cLiq.data.datasets[0].data=H.liqTotal;cLiq.data.datasets[1].data=H.liqFloor;cLiq.data.datasets[2].data=H.liqMarket;cLiq.update('none');
+  cMFR.data.labels=lb;cMFR.data.datasets[0].data=H.mfr;cMFR.data.datasets[1].data=H.fp;cMFR.update('none');
+  cLoan.data.labels=lb;cLoan.data.datasets[0].data=H.debt;cLoan.data.datasets[1].data=H.collateral;cLoan.data.datasets[2].data=H.util;cLoan.update('none');
+}
+
+// === PRESETS ===
+const P={
+  meme:{slope:80,fp:.001,supply:0,liq:0,t:30,x:5,c:2,maxT:50,minT:20,buyFee:1,sellFee:1.5,ltv:100,apr:10},
+  defi:{slope:30,fp:.01,supply:0,liq:0,t:25,x:3,c:1.5,maxT:45,minT:15,buyFee:.5,sellFee:1,ltv:80,apr:8},
+  nft:{slope:150,fp:.1,supply:0,liq:0,t:35,x:8,c:3,maxT:55,minT:25,buyFee:2,sellFee:3,ltv:60,apr:15},
+  infra:{slope:15,fp:.005,supply:0,liq:0,t:20,x:2,c:1,maxT:40,minT:10,buyFee:.3,sellFee:.5,ltv:90,apr:5},
+};
+function applyPreset(n){const p=P[n];document.getElementById('p_slope').value=p.slope;document.getElementById('p_fp').value=p.fp;document.getElementById('p_supply').value=p.supply;document.getElementById('p_liq').value=p.liq;document.getElementById('p_t').value=p.t;document.getElementById('p_x').value=p.x;document.getElementById('p_c').value=p.c;document.getElementById('p_maxT').value=p.maxT;document.getElementById('p_minT').value=p.minT;document.getElementById('p_buyFee').value=p.buyFee;document.getElementById('p_sellFee').value=p.sellFee;document.getElementById('p_ltv').value=p.ltv;document.getElementById('p_apr').value=p.apr;document.querySelectorAll('.presets button').forEach(b=>b.classList.remove('active'));document.getElementById('p-'+n).classList.add('active');initState()}
+function onP(){document.querySelectorAll('.presets button').forEach(b=>b.classList.remove('active'));initState()}
+function reset(){initState();logs=[];document.getElementById('logArea').innerHTML='<div class="log-entry" style="color:var(--text2)">Reset.</div>'}
+
+mkCharts();initState();
+</script>
+</body>
+</html>
