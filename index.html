@@ -159,8 +159,8 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
         <button onclick="applyPreset('infra')" id="p-infra" title="Low slope, low fees — infrastructure token">Infra</button>
         <button onclick="applyPreset('hieff')" id="p-hieff" title="Low slope + aggressive MFR (T=10%, X=15%) — floor price chases market price fast, higher capital efficiency but pool lendable drains faster" style="color:var(--orange)">Hi-Eff</button>
       </div>
-      <div class="param-row"><label title="Controls how fast price rises with supply. Higher = steeper curve, more price impact per trade.">slope (m) ×10⁻¹⁰</label><input type="number" id="p_slope" value="80" min="1" max="1000" step="1" onchange="onP()"></div>
-      <div class="param-row"><label title="Initial floor price in MON. Minimum guaranteed price — can only go up via MFR, never down.">floor price (MON)</label><input type="number" id="p_fp" value="0.001" min="0.0001" max="100" step="0.0001" onchange="onP()"></div>
+      <div class="param-row"><label title="Controls how fast price rises with supply. Higher = steeper curve, more price impact per trade.">slope (m) ×10⁻¹⁰</label><input type="number" id="p_slope" value="67" min="1" max="1000" step="1" onchange="onP()"></div>
+      <div class="param-row"><label title="Initial floor price in MON. Minimum guaranteed price — can only go up via MFR, never down.">floor price (MON)</label><input type="number" id="p_fp" value="0.00345" min="0.0001" max="100" step="0.0001" onchange="onP()"></div>
       <div class="param-row"><label title="Starting token supply. Usually 0 for a new launch.">init supply</label><input type="number" id="p_supply" value="0" min="0" max="1e9" step="100000" onchange="onP()"></div>
       <div class="param-row"><label title="Starting MON in the bonding curve pool. Usually 0 for a new launch.">init liquidity (MON)</label><input type="number" id="p_liq" value="0" min="0" max="1e9" step="1000" onchange="onP()"></div>
     </div>
@@ -170,11 +170,11 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
   <details>
     <summary>MFR (Auto Floor ↑)</summary>
     <div class="det-body">
-      <div class="param-row"><label title="MFR threshold — when Market Funding Ratio exceeds T, floor price auto-increases">threshold T (%)</label><input type="number" id="p_t" value="30" min="1" max="90" step="1" onchange="onP()"></div>
-      <div class="param-row"><label title="When MFR triggers, X% of market support is moved to floor support, raising floor price">move X (%)</label><input type="number" id="p_x" value="5" min="0.1" max="50" step="0.1" onchange="onP()"></div>
+      <div class="param-row"><label title="MFR threshold — when Market Funding Ratio exceeds T, floor price auto-increases">threshold T (%)</label><input type="number" id="p_t" value="20" min="1" max="90" step="1" onchange="onP()"></div>
+      <div class="param-row"><label title="When MFR triggers, X% of market support is moved to floor support, raising floor price">move X (%)</label><input type="number" id="p_x" value="8" min="0.1" max="50" step="0.1" onchange="onP()"></div>
       <div class="param-row"><label title="After each MFR trigger, T increases by C% (harder to trigger again). Decays back if not triggered.">T adjust C (%)</label><input type="number" id="p_c" value="2" min="0.1" max="20" step="0.1" onchange="onP()"></div>
       <div class="param-row"><label title="Maximum value T can reach — caps how hard MFR is to trigger">maxT (%)</label><input type="number" id="p_maxT" value="50" min="10" max="95" step="1" onchange="onP()"></div>
-      <div class="param-row"><label title="Minimum value T can decay to — floor of the trigger threshold">minT (%)</label><input type="number" id="p_minT" value="20" min="1" max="90" step="1" onchange="onP()"></div>
+      <div class="param-row"><label title="Minimum value T can decay to — floor of the trigger threshold">minT (%)</label><input type="number" id="p_minT" value="15" min="1" max="90" step="1" onchange="onP()"></div>
     </div>
   </details>
 
@@ -482,137 +482,137 @@ async function autoSim(type){
     resolve();
   });
 
-  // Trade sizes calibrated so final TVL ≈ $80K-$120K (3.2M-4.8M MON)
-  // With slope=80e-10, fp=0.001: need ~30-35M net supply
+  // Trade sizes calibrated for pump.fun-aligned params (m=6.7e-9, fp=0.00345)
+  // Target: graduation at S≈20M → MC≈$69K, TVL≈$35K (matches pump.fun)
   if(type==='launch'){
     log('── Seed buyers ──','mfr');
-    for(let i=0;i<10&&simRunning;i++){doBuy(rnd(100000,400000));await delay()}
+    for(let i=0;i<10&&simRunning;i++){doBuy(rnd(80000,250000));await delay()}
     log('── FOMO wave 1 ──','mfr');
-    for(let i=0;i<20&&simRunning;i++){doBuy(rnd(500000,1500000));await delay()}
+    for(let i=0;i<15&&simRunning;i++){doBuy(rnd(300000,900000));await delay()}
     log('── Early loopers ──','mfr');
-    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(400000,1000000),3,false);await delay()}
+    for(let i=0;i<5&&simRunning;i++){doSimLoop(rnd(200000,600000),3,false);await delay()}
     log('── Profit taking ──','mfr');
-    for(let i=0;i<10&&simRunning;i++){doSell(rnd(200000,600000));await delay()}
+    for(let i=0;i<8&&simRunning;i++){doSell(rnd(100000,400000));await delay()}
     log('── Second wave + loops ──','mfr');
-    for(let i=0;i<12&&simRunning;i++){
-      if(Math.random()<0.7) doBuy(rnd(300000,1200000));
-      else doSimLoop(rnd(200000,800000),2,false);
+    for(let i=0;i<10&&simRunning;i++){
+      if(Math.random()<0.7) doBuy(rnd(200000,700000));
+      else doSimLoop(rnd(150000,500000),2,false);
       await delay();
     }
     log('── Consolidation ──','mfr');
-    for(let i=0;i<8&&simRunning;i++){
-      if(Math.random()<0.45) doBuy(rnd(200000,800000));
-      else doSell(rnd(100000,500000));
+    for(let i=0;i<6&&simRunning;i++){
+      if(Math.random()<0.45) doBuy(rnd(150000,500000));
+      else doSell(rnd(80000,350000));
       await delay();
     }
   }
   else if(type==='mature'){
-    for(let i=0;i<100&&simRunning;i++){
+    for(let i=0;i<80&&simRunning;i++){
       const r=Math.random();
-      if(r<0.40) doBuy(rnd(150000,600000));
-      else if(r<0.65) doSell(rnd(80000,400000));
-      else if(r<0.80) doSimLoop(rnd(150000,500000),2,Math.random()<0.5);
-      else if(r<0.90) doBuy(rnd(800000,2000000));
-      else doSell(rnd(400000,1200000));
+      if(r<0.40) doBuy(rnd(100000,500000));
+      else if(r<0.65) doSell(rnd(60000,300000));
+      else if(r<0.80) doSimLoop(rnd(100000,400000),2,Math.random()<0.5);
+      else if(r<0.90) doBuy(rnd(500000,1200000));
+      else doSell(rnd(300000,800000));
       await delay();
     }
   }
   else if(type==='crash'){
     log('── Pump + leverage ──','mfr');
-    for(let i=0;i<20&&simRunning;i++){doBuy(rnd(500000,1500000));await delay()}
-    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(400000,1200000),3,false);await delay()}
+    for(let i=0;i<16&&simRunning;i++){doBuy(rnd(400000,1000000));await delay()}
+    for(let i=0;i<5&&simRunning;i++){doSimLoop(rnd(300000,800000),3,false);await delay()}
     log('── Peak ──','mfr');
-    for(let i=0;i<6&&simRunning;i++){doSell(rnd(200000,800000));await delay()}
+    for(let i=0;i<6&&simRunning;i++){doSell(rnd(150000,500000));await delay()}
     log('── Panic: sells + forced repays ──','mfr');
-    for(let i=0;i<40&&simRunning;i++){
+    for(let i=0;i<35&&simRunning;i++){
       const r=Math.random();
-      if(r<0.55) doSell(rnd(300000,1200000));
-      else if(r<0.75) doSimLoop(rnd(150000,500000),1,true);
-      else doBuy(rnd(100000,400000));
+      if(r<0.55) doSell(rnd(200000,800000));
+      else if(r<0.75) doSimLoop(rnd(100000,400000),1,true);
+      else doBuy(rnd(80000,300000));
       await delay();
     }
   }
   else if(type==='leverage'){
     log('── Accumulation ──','mfr');
-    for(let i=0;i<20&&simRunning;i++){doBuy(rnd(600000,1800000));await delay()}
+    for(let i=0;i<16&&simRunning;i++){doBuy(rnd(400000,1000000));await delay()}
     log('── Leverage wave 1: aggressive loopers ──','mfr');
-    for(let i=0;i<8&&simRunning;i++){doSimLoop(rnd(500000,1500000),rnd(3,5),false);await delay()}
+    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(300000,1000000),rnd(3,5),false);await delay()}
     log('── Organic trading ──','mfr');
-    for(let i=0;i<12&&simRunning;i++){
-      if(Math.random()<0.55) doBuy(rnd(200000,800000));
-      else doSell(rnd(100000,400000));
+    for(let i=0;i<10&&simRunning;i++){
+      if(Math.random()<0.55) doBuy(rnd(150000,600000));
+      else doSell(rnd(80000,300000));
       await delay();
     }
     log('── Leverage wave 2: conservative (repay after) ──','mfr');
-    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(300000,800000),2,true);await delay()}
+    for(let i=0;i<5&&simRunning;i++){doSimLoop(rnd(200000,600000),2,true);await delay()}
     log('── Leverage wave 3: mixed ──','mfr');
-    for(let i=0;i<6&&simRunning;i++){doSimLoop(rnd(400000,1000000),rnd(2,4),Math.random()<0.4);await delay()}
+    for(let i=0;i<5&&simRunning;i++){doSimLoop(rnd(300000,700000),rnd(2,4),Math.random()<0.4);await delay()}
     log('── Cooldown ──','mfr');
-    for(let i=0;i<12&&simRunning;i++){
-      if(Math.random()<0.4) doBuy(rnd(200000,600000));
-      else doSell(rnd(100000,400000));
+    for(let i=0;i<10&&simRunning;i++){
+      if(Math.random()<0.4) doBuy(rnd(150000,500000));
+      else doSell(rnd(80000,300000));
       await delay();
     }
   }
   else if(type==='whale'){
     log('── Retail base ──','mfr');
-    for(let i=0;i<16&&simRunning;i++){doBuy(rnd(200000,600000));await delay()}
+    for(let i=0;i<12&&simRunning;i++){doBuy(rnd(150000,500000));await delay()}
     log('── 🐋 Whale loop leverage ──','mfr');
-    doSimLoop(rnd(3000000,6000000),5,false);await delay();
-    for(let i=0;i<4&&simRunning;i++){doBuy(rnd(1500000,4000000));await delay()}
+    doSimLoop(rnd(2000000,4000000),5,false);await delay();
+    for(let i=0;i<3&&simRunning;i++){doBuy(rnd(1000000,2500000));await delay()}
     log('── 🐋 Shake out ──','mfr');
-    for(let i=0;i<12&&simRunning;i++){doSell(rnd(300000,1200000));await delay()}
+    for(let i=0;i<10&&simRunning;i++){doSell(rnd(200000,800000));await delay()}
     log('── Retail panic sell ──','mfr');
-    for(let i=0;i<8&&simRunning;i++){doSell(rnd(200000,800000));await delay()}
+    for(let i=0;i<6&&simRunning;i++){doSell(rnd(150000,600000));await delay()}
     log('── 🐋 Re-accumulation with loops ──','mfr');
-    doSimLoop(rnd(2000000,4000000),3,false);await delay();
-    for(let i=0;i<6&&simRunning;i++){doBuy(rnd(1200000,3000000));await delay()}
+    doSimLoop(rnd(1500000,3000000),3,false);await delay();
+    for(let i=0;i<5&&simRunning;i++){doBuy(rnd(800000,2000000));await delay()}
     log('── Organic recovery ──','mfr');
-    for(let i=0;i<10&&simRunning;i++){
-      if(Math.random()<0.6) doBuy(rnd(300000,1000000));
-      else doSell(rnd(150000,600000));
+    for(let i=0;i<8&&simRunning;i++){
+      if(Math.random()<0.6) doBuy(rnd(200000,700000));
+      else doSell(rnd(100000,400000));
       await delay();
     }
     log('── Late retail FOMO ──','mfr');
-    for(let i=0;i<8&&simRunning;i++){doBuy(rnd(400000,1500000));await delay()}
+    for(let i=0;i<6&&simRunning;i++){doBuy(rnd(300000,1000000));await delay()}
   }
   else if(type==='full'){
     log('── Phase 1: Launch ──','mfr');
-    for(let i=0;i<10&&simRunning;i++){doBuy(rnd(200000,600000));await delay()}
+    for(let i=0;i<8&&simRunning;i++){doBuy(rnd(150000,500000));await delay()}
 
     log('── Phase 2: Growth + Loop Leverage ──','mfr');
-    for(let i=0;i<24&&simRunning;i++){
+    for(let i=0;i<20&&simRunning;i++){
       const r=Math.random();
-      if(r<0.45) doBuy(rnd(200000,800000));
-      else if(r<0.65) doSell(rnd(100000,400000));
-      else if(r<0.85) doSimLoop(rnd(200000,600000),rnd(2,4),false);
-      else doBuy(rnd(500000,1000000));
+      if(r<0.45) doBuy(rnd(150000,600000));
+      else if(r<0.65) doSell(rnd(80000,300000));
+      else if(r<0.85) doSimLoop(rnd(150000,500000),rnd(2,4),false);
+      else doBuy(rnd(400000,800000));
       await delay();
     }
 
     log('── Phase 3: Correction + Forced Repays ──','mfr');
-    for(let i=0;i<20&&simRunning;i++){
+    for(let i=0;i<16&&simRunning;i++){
       const r=Math.random();
-      if(r<0.5) doSell(rnd(200000,800000));
-      else if(r<0.75) doSimLoop(rnd(150000,400000),1,true);
-      else doBuy(rnd(150000,600000));
+      if(r<0.5) doSell(rnd(150000,600000));
+      else if(r<0.75) doSimLoop(rnd(100000,300000),1,true);
+      else doBuy(rnd(100000,400000));
       await delay();
     }
 
     log('── Phase 4: Recovery ──','mfr');
-    for(let i=0;i<16&&simRunning;i++){
-      if(Math.random()<0.65) doBuy(rnd(200000,700000));
-      else doSell(rnd(100000,500000));
+    for(let i=0;i<12&&simRunning;i++){
+      if(Math.random()<0.65) doBuy(rnd(150000,500000));
+      else doSell(rnd(80000,350000));
       await delay();
     }
 
     log('── Phase 5: Maturity (mixed with loops) ──','mfr');
-    for(let i=0;i<24&&simRunning;i++){
+    for(let i=0;i<20&&simRunning;i++){
       const r=Math.random();
-      if(r<0.35) doBuy(rnd(200000,800000));
-      else if(r<0.60) doSell(rnd(150000,600000));
-      else if(r<0.80) doSimLoop(rnd(200000,600000),2,Math.random()<0.6);
-      else doBuy(rnd(600000,1500000));
+      if(r<0.35) doBuy(rnd(150000,600000));
+      else if(r<0.60) doSell(rnd(100000,400000));
+      else if(r<0.80) doSimLoop(rnd(150000,500000),2,Math.random()<0.6);
+      else doBuy(rnd(400000,1000000));
       await delay();
     }
   }
@@ -860,11 +860,11 @@ function updCharts(){
 
 // === PRESETS ===
 const P={
-  meme:{slope:80,fp:.001,supply:0,liq:0,t:30,x:5,c:2,maxT:50,minT:20,buyFee:1,sellFee:1.5,ltv:100,apr:10},
-  defi:{slope:30,fp:.01,supply:0,liq:0,t:25,x:3,c:1.5,maxT:45,minT:15,buyFee:.5,sellFee:1,ltv:80,apr:8},
-  nft:{slope:150,fp:.1,supply:0,liq:0,t:35,x:8,c:3,maxT:55,minT:25,buyFee:2,sellFee:3,ltv:60,apr:15},
-  infra:{slope:15,fp:.005,supply:0,liq:0,t:20,x:2,c:1,maxT:40,minT:10,buyFee:.3,sellFee:.5,ltv:90,apr:5},
-  hieff:{slope:10,fp:.01,supply:0,liq:0,t:10,x:15,c:1,maxT:25,minT:5,buyFee:.5,sellFee:1,ltv:100,apr:5},
+  meme:{slope:67,fp:.00345,supply:0,liq:0,t:20,x:8,c:2,maxT:50,minT:15,buyFee:1,sellFee:1.5,ltv:100,apr:10},
+  defi:{slope:30,fp:.01,supply:0,liq:0,t:25,x:5,c:1.5,maxT:45,minT:15,buyFee:.5,sellFee:1,ltv:90,apr:8},
+  nft:{slope:120,fp:.005,supply:0,liq:0,t:25,x:8,c:2,maxT:50,minT:20,buyFee:2,sellFee:3,ltv:70,apr:15},
+  infra:{slope:20,fp:.008,supply:0,liq:0,t:20,x:4,c:1,maxT:40,minT:10,buyFee:.3,sellFee:.5,ltv:90,apr:5},
+  hieff:{slope:30,fp:.005,supply:0,liq:0,t:10,x:15,c:1,maxT:25,minT:5,buyFee:.5,sellFee:1,ltv:100,apr:5},
 };
 function applyPreset(n){const p=P[n];document.getElementById('p_slope').value=p.slope;document.getElementById('p_fp').value=p.fp;document.getElementById('p_supply').value=p.supply;document.getElementById('p_liq').value=p.liq;document.getElementById('p_t').value=p.t;document.getElementById('p_x').value=p.x;document.getElementById('p_c').value=p.c;document.getElementById('p_maxT').value=p.maxT;document.getElementById('p_minT').value=p.minT;document.getElementById('p_buyFee').value=p.buyFee;document.getElementById('p_sellFee').value=p.sellFee;document.getElementById('p_ltv').value=p.ltv;document.getElementById('p_apr').value=p.apr;document.querySelectorAll('.presets button').forEach(b=>b.classList.remove('active'));document.getElementById('p-'+n).classList.add('active');initState()}
 function onP(){document.querySelectorAll('.presets button').forEach(b=>b.classList.remove('active'));initState()}
