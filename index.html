@@ -40,7 +40,7 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
 /* Params */
 .param-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
 .param-row:last-child{margin-bottom:0}
-.param-row label{font-size:11px;color:var(--text2);flex:1}
+.param-row label{font-size:11px;color:var(--text2);flex:1;cursor:help}
 .param-row input[type=number]{width:85px;background:var(--bg);border:1px solid var(--border);color:var(--green);padding:3px 5px;border-radius:3px;font-size:11px;text-align:right;font-family:var(--font)}
 
 /* Presets */
@@ -64,6 +64,7 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
 /* Loan mini stats */
 .loan-row{display:flex;gap:3px;margin-bottom:6px;flex-wrap:wrap}
 .loan-chip{background:var(--bg);border-radius:3px;padding:3px 6px;font-size:10px;flex:1;min-width:0;border:1px solid var(--border)}
+.loan-chip{cursor:help}
 .loan-chip .lk{color:var(--text2)}.loan-chip .lv{font-weight:600;font-size:11px;display:block;margin-top:1px}
 
 /* Top ticker bar */
@@ -71,7 +72,7 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
 .dash-label{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;padding-left:2px;display:flex;align-items:center;gap:5px}
 .dash-label::after{content:'';flex:1;height:1px;background:var(--border)}
 .ticker{display:flex;gap:4px;flex-wrap:wrap}
-.ticker-item{background:var(--card2);border:1px solid var(--border);border-radius:3px;padding:4px 8px;flex:1;min-width:0;text-align:center}
+.ticker-item{background:var(--card2);border:1px solid var(--border);border-radius:3px;padding:4px 8px;flex:1;min-width:0;text-align:center;cursor:help}
 .ticker-item .tk{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em}
 .ticker-item .tv{font-size:13px;font-weight:700;margin-top:1px;font-variant-numeric:tabular-nums}
 .chart-title{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;cursor:help;border-bottom:1px dashed var(--border);display:inline-block}
@@ -110,32 +111,32 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
 
   <!-- Trade -->
   <div class="card">
-    <div class="trade-input"><input type="number" id="tradeAmt" placeholder="Token amount" value="1000000"></div>
+    <div class="trade-input"><input type="number" id="tradeAmt" placeholder="Token amount" value="1000000" title="Number of tokens to buy or sell"></div>
     <div class="trade-actions" style="margin-bottom:6px">
-      <button class="btn btn-buy" onclick="doTrade('buy')">Buy</button>
-      <button class="btn btn-sell" onclick="doTrade('sell')">Sell</button>
-      <button class="btn btn-reset" onclick="reset()">Reset</button>
+      <button class="btn btn-buy" onclick="doTrade('buy')" title="Buy tokens with MON — price increases along bonding curve">Buy</button>
+      <button class="btn btn-sell" onclick="doTrade('sell')" title="Sell tokens for MON — price decreases along bonding curve">Sell</button>
+      <button class="btn btn-reset" onclick="reset()" title="Reset all state to initial values">Reset</button>
     </div>
   </div>
 
   <!-- Loop Lending -->
   <div class="card">
-    <h3>Loop Lending</h3>
+    <h3 title="Collateralize tokens at floor price to borrow MON, then buy more tokens — repeat to leverage up">Loop Lending</h3>
     <div class="loan-row">
-      <div class="loan-chip"><span class="lk">Collateral</span><span class="lv cyan" id="l_col">0</span></div>
-      <div class="loan-chip"><span class="lk">Debt (MON)</span><span class="lv orange" id="l_debt">0</span></div>
-      <div class="loan-chip"><span class="lk">Pool Lendable</span><span class="lv mon" id="l_cap">0</span></div>
-      <div class="loan-chip"><span class="lk">Util Rate</span><span class="lv cyan" id="l_util">0%</span></div>
+      <div class="loan-chip" title="Total tokens locked as collateral across all users (you + external sim traders)"><span class="lk">Collateral</span><span class="lv cyan" id="l_col">0</span></div>
+      <div class="loan-chip" title="Total MON borrowed from pool — reduces pool liquidity, repay returns it"><span class="lk">Debt (MON)</span><span class="lv orange" id="l_debt">0</span></div>
+      <div class="loan-chip" title="MON available to borrow = Pool Liquidity - Floor Support - Existing Debt. Cannot borrow from floor support portion."><span class="lk">Pool Lendable</span><span class="lv mon" id="l_cap">0</span></div>
+      <div class="loan-chip" title="Utilization Rate = Debt / (Debt + Lendable). How much of the lendable pool is currently borrowed. 100% = no more borrowing possible."><span class="lk">Util Rate</span><span class="lv cyan" id="l_util">0%</span></div>
     </div>
-    <div class="trade-input"><input type="number" id="loanAmt" placeholder="Tokens to collateralize" value="500000"></div>
+    <div class="trade-input"><input type="number" id="loanAmt" placeholder="Tokens to collateralize" value="500000" title="Number of your free tokens to lock as collateral"></div>
     <div class="trade-actions" style="margin-bottom:6px">
-      <button class="btn btn-borrow" onclick="doLend('borrow')">Collateralize</button>
-      <button class="btn btn-repay" onclick="doLend('repay')">Repay All</button>
+      <button class="btn btn-borrow" onclick="doLend('borrow')" title="Lock tokens as collateral → borrow MON at floor price × LTV from pool">Collateralize</button>
+      <button class="btn btn-repay" onclick="doLend('repay')" title="Repay all your MON debt → unlock all your collateral tokens">Repay All</button>
     </div>
     <div class="trade-actions">
-      <button class="btn btn-scene" style="background:var(--accent)" onclick="doLoop(3)">Loop ×3</button>
-      <button class="btn btn-scene" style="background:var(--pink)" onclick="doLoop(5)">Loop ×5</button>
-      <button class="btn btn-scene" style="background:var(--orange);color:#000" onclick="doLoop(10)">Loop ×10</button>
+      <button class="btn btn-scene" style="background:var(--accent)" onclick="doLoop(3)" title="Buy tokens first, then auto-repeat 3 times: collateralize → borrow → buy more. Each round borrows less (converges).">Loop ×3</button>
+      <button class="btn btn-scene" style="background:var(--pink)" onclick="doLoop(5)" title="Same as Loop ×3 but 5 rounds — more leverage, more debt">Loop ×5</button>
+      <button class="btn btn-scene" style="background:var(--orange);color:#000" onclick="doLoop(10)" title="Same as Loop ×3 but 10 rounds — maximum leverage. Later rounds borrow almost nothing.">Loop ×10</button>
     </div>
   </div>
 
@@ -149,10 +150,10 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
         <button onclick="applyPreset('nft')" id="p-nft">NFT</button>
         <button onclick="applyPreset('infra')" id="p-infra">Infra</button>
       </div>
-      <div class="param-row"><label>slope (m) ×10⁻¹⁰</label><input type="number" id="p_slope" value="80" min="1" max="1000" step="1" onchange="onP()"></div>
-      <div class="param-row"><label>floor price (MON)</label><input type="number" id="p_fp" value="0.001" min="0.0001" max="100" step="0.0001" onchange="onP()"></div>
-      <div class="param-row"><label>init supply</label><input type="number" id="p_supply" value="0" min="0" max="1e9" step="100000" onchange="onP()"></div>
-      <div class="param-row"><label>init liquidity (MON)</label><input type="number" id="p_liq" value="0" min="0" max="1e9" step="1000" onchange="onP()"></div>
+      <div class="param-row"><label title="Controls how fast price rises with supply. Higher = steeper curve, more price impact per trade.">slope (m) ×10⁻¹⁰</label><input type="number" id="p_slope" value="80" min="1" max="1000" step="1" onchange="onP()"></div>
+      <div class="param-row"><label title="Initial floor price in MON. Minimum guaranteed price — can only go up via MFR, never down.">floor price (MON)</label><input type="number" id="p_fp" value="0.001" min="0.0001" max="100" step="0.0001" onchange="onP()"></div>
+      <div class="param-row"><label title="Starting token supply. Usually 0 for a new launch.">init supply</label><input type="number" id="p_supply" value="0" min="0" max="1e9" step="100000" onchange="onP()"></div>
+      <div class="param-row"><label title="Starting MON in the bonding curve pool. Usually 0 for a new launch.">init liquidity (MON)</label><input type="number" id="p_liq" value="0" min="0" max="1e9" step="1000" onchange="onP()"></div>
     </div>
   </details>
 
@@ -160,11 +161,11 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
   <details>
     <summary>MFR (Auto Floor ↑)</summary>
     <div class="det-body">
-      <div class="param-row"><label>threshold T (%)</label><input type="number" id="p_t" value="30" min="1" max="90" step="1" onchange="onP()"></div>
-      <div class="param-row"><label>move X (%)</label><input type="number" id="p_x" value="5" min="0.1" max="50" step="0.1" onchange="onP()"></div>
-      <div class="param-row"><label>T adjust C (%)</label><input type="number" id="p_c" value="2" min="0.1" max="20" step="0.1" onchange="onP()"></div>
-      <div class="param-row"><label>maxT (%)</label><input type="number" id="p_maxT" value="50" min="10" max="95" step="1" onchange="onP()"></div>
-      <div class="param-row"><label>minT (%)</label><input type="number" id="p_minT" value="20" min="1" max="90" step="1" onchange="onP()"></div>
+      <div class="param-row"><label title="MFR threshold — when Market Funding Ratio exceeds T, floor price auto-increases">threshold T (%)</label><input type="number" id="p_t" value="30" min="1" max="90" step="1" onchange="onP()"></div>
+      <div class="param-row"><label title="When MFR triggers, X% of market support is moved to floor support, raising floor price">move X (%)</label><input type="number" id="p_x" value="5" min="0.1" max="50" step="0.1" onchange="onP()"></div>
+      <div class="param-row"><label title="After each MFR trigger, T increases by C% (harder to trigger again). Decays back if not triggered.">T adjust C (%)</label><input type="number" id="p_c" value="2" min="0.1" max="20" step="0.1" onchange="onP()"></div>
+      <div class="param-row"><label title="Maximum value T can reach — caps how hard MFR is to trigger">maxT (%)</label><input type="number" id="p_maxT" value="50" min="10" max="95" step="1" onchange="onP()"></div>
+      <div class="param-row"><label title="Minimum value T can decay to — floor of the trigger threshold">minT (%)</label><input type="number" id="p_minT" value="20" min="1" max="90" step="1" onchange="onP()"></div>
     </div>
   </details>
 
@@ -172,10 +173,10 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
   <details>
     <summary>Fees & Lending</summary>
     <div class="det-body">
-      <div class="param-row"><label>buy fee (%)</label><input type="number" id="p_buyFee" value="1" min="0" max="20" step="0.1" onchange="onP()"></div>
-      <div class="param-row"><label>sell fee (%)</label><input type="number" id="p_sellFee" value="1.5" min="0" max="20" step="0.1" onchange="onP()"></div>
-      <div class="param-row"><label>borrow LTV (%)</label><input type="number" id="p_ltv" value="100" min="10" max="100" step="5" onchange="onP()"></div>
-      <div class="param-row"><label>borrow APR (%)</label><input type="number" id="p_apr" value="10" min="0" max="100" step="1" onchange="onP()"></div>
+      <div class="param-row"><label title="Fee charged on top of buy cost. Goes to protocol as revenue.">buy fee (%)</label><input type="number" id="p_buyFee" value="1" min="0" max="20" step="0.1" onchange="onP()"></div>
+      <div class="param-row"><label title="Fee deducted from sell proceeds. Stays in pool, strengthening floor support.">sell fee (%)</label><input type="number" id="p_sellFee" value="1.5" min="0" max="20" step="0.1" onchange="onP()"></div>
+      <div class="param-row"><label title="Loan-to-Value ratio. 100% = borrow up to full floor value of collateral. Lower = more conservative.">borrow LTV (%)</label><input type="number" id="p_ltv" value="100" min="10" max="100" step="5" onchange="onP()"></div>
+      <div class="param-row"><label title="Annual interest rate on borrowed MON (not yet implemented in sim — for future use).">borrow APR (%)</label><input type="number" id="p_apr" value="10" min="0" max="100" step="1" onchange="onP()"></div>
     </div>
   </details>
 
@@ -237,8 +238,8 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
   <!-- MFR bar -->
   <div class="card" style="padding:6px 10px;margin-bottom:10px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-      <h3 style="margin:0">MFR</h3>
-      <span style="font-size:.65rem;color:var(--orange)" id="mfrThreshLabel">T = 30%</span>
+      <h3 style="margin:0;cursor:help" title="Market Funding Ratio = Market Support / Total Liquidity. When MFR exceeds threshold T, floor price automatically increases. T then rises (harder to trigger again). If not triggered for a while, T decays back down.">MFR</h3>
+      <span style="font-size:.65rem;color:var(--orange);cursor:help" id="mfrThreshLabel" title="MFR Threshold — when MFR bar exceeds this line, floor price is automatically raised">T = 30%</span>
     </div>
     <div class="mfr-bar-outer">
       <div class="mfr-bar-inner" id="mfrBar" style="width:0%;background:linear-gradient(90deg,var(--green),var(--orange),var(--red))"></div>
