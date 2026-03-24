@@ -292,21 +292,23 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
 
       <div style="color:var(--green);font-weight:700;margin-bottom:4px">▎优势</div>
       <div style="margin-bottom:10px">
-        <b style="color:var(--text)">1. 零清算风险</b> — 借款按 floor price 估值，floor price 只升不降，抵押物估值永远 ≥ 借款额，天然不可能被清算。对比 Aave/Compound 用 oracle 喂价，价格波动就爆仓。<br>
-        <b style="color:var(--text)">2. 无需外部预言机</b> — 地板价由合约内部 MFR 机制计算，不依赖 Chainlink 等外部喂价，没有预言机攻击风险、喂价延迟、额外 gas 成本。<br>
-        <b style="color:var(--text)">3. 买入正反馈飞轮</b> — 买入 → 价格涨 → MFR 触发 → FP 涨 → 借贷容量增加 → 可借更多 MON → 继续买入。激励长期持有。<br>
-        <b style="color:var(--text)">4. 借贷自然调节</b> — Pool Lendable 有上限（= market support），借的人越多 → util% 越高 → 接近 100% 就借不动了。天然供需平衡，不需要复杂利率曲线。<br>
-        <b style="color:var(--text)">5. 软锁仓效果</b> — 抵押 token 借了 MON 后需要还款才能取回 token，形成自然留存，减少抛压。
+        <b style="color:var(--text)">1. 任意 Token 即借即贷</b> — 每个通过 bonding curve 发行的 token 天然自带借贷能力，无需审核上架、无需投票治理、无需配置预言机。发 token = 自动有交易 + 保底价 + 借贷。<br>
+        <b style="color:var(--text)">2. 零清算风险</b> — 借款按 floor price 估值，floor price 只升不降，抵押物估值永远 ≥ 借款额，天然不可能被清算。对比 Aave/Compound 用 oracle 喂价，价格波动就爆仓。<br>
+        <b style="color:var(--text)">3. 无需外部预言机</b> — 地板价由合约内部 MFR 机制计算，不依赖 Chainlink 等外部喂价。没有预言机攻击、喂价延迟、额外 gas 成本。<br>
+        <b style="color:var(--text)">4. 抵押释放流动性</b> — 抵押的 token 不可能被卖出赎回，所以它们对应的 floor support 被释放出来可供借贷。抵押越多 → 可借额度越大，形成正向循环。<br>
+        <b style="color:var(--text)">5. 买入正反馈飞轮</b> — 买入 → 价格涨 → MFR 触发 → FP 涨 → 借贷容量增加 → 可借更多 MON → 继续买入。激励长期持有。<br>
+        <b style="color:var(--text)">6. 统一货币层</b> — 所有 token 借出的都是 MON，不需要跨 token 流动性匹配。MON 作为 Monad 原生资产，借出后可自由使用（买其他 token、提供流动性、链上交互等）。<br>
+        <b style="color:var(--text)">7. 软锁仓减抛压</b> — 抵押 token 借了 MON 后需要还款才能取回，形成自然留存，减少市场抛压。
       </div>
 
       <div style="color:var(--red);font-weight:700;margin-bottom:4px">▎劣势</div>
       <div style="margin-bottom:10px">
-        <b style="color:var(--text)">1. 资本效率低</b> — 按 floor price 借贷（通常只有市价的 20-30%），100 万市值的 token 可能只能借 20-30 万 MON。Loop 天然收敛，后面几轮几乎借不出来。<br>
-        <b style="color:var(--text)">2. 流动性被锁死</b> — 借贷直接从交易池的 market support 中抽取 MON。util% 过高时新用户无法借贷，大额卖出也可能因池子不够而被限额。<br>
-        <b style="color:var(--text)">3. 群体正反馈过热</b> — 多个用户同时循环贷时形成群体飞轮：A 的 Loop 推高价格 → B 看到借贷容量增加也 Loop → 价格被推到远超内在价值。一旦买盘停止，地板价不降导致"虚假繁荣"。<br>
-        <b style="color:var(--text)">4. 退出流动性问题</b> — 大量 token 被抵押锁住，free float 少。大额卖出时 pool MON 不够（market support 被借走了），实际成交价远低于显示的 market price。<br>
-        <b style="color:var(--text)">5. 地板价是"名义保底"</b> — price ≥ fp 永远成立，但大额卖出的平均价远低于当前价（bonding curve 滑点）。只有最后一个 token 的边际价 = 显示价格。<br>
-        <b style="color:var(--text)">6. MC 虚高</b> — MC = 当前价 × 全部供应量，但早期 token 是低价买入的。bonding curve 天然 MC ≈ 2×TVL，看起来很大但实际流动性没那么多。
+        <b style="color:var(--text)">1. 资本效率受限于 FP/MP 比值</b> — 按 floor price 借贷，FP 通常是市价的 20-40%（取决于 MFR 参数）。100 万市值的 token 可能只能借 20-40 万 MON。Loop 天然收敛。<br>
+        <b style="color:var(--text)">2. 借贷影响卖出流动性</b> — 借贷从交易池抽取 MON（抵押 token 释放的 floor support 部分）。高 util% 时，大额卖出可能因池子 MON 不够而被限额。<br>
+        <b style="color:var(--text)">3. 群体正反馈过热</b> — 多个用户同时循环贷形成群体飞轮：A 的 Loop 推高价格 → B 的借贷容量增加也 Loop → 价格偏离内在价值。买盘停止后地板价不降，形成"虚高"局面。<br>
+        <b style="color:var(--text)">4. 地板价是"名义保底"</b> — price ≥ fp 永远成立，但大额卖出沿曲线下滑有巨大滑点。只有最后一个 token 的边际价 = 显示的 market price。<br>
+        <b style="color:var(--text)">5. MC 虚高</b> — MC = 当前价 × 全部供应量，但早期 token 是低价买入的。bonding curve 天然 MC ≈ 2×TVL，看起来很大但实际流动性没那么多。<br>
+        <b style="color:var(--text)">6. 无利息则无偿还动力</b> — 如果不收借贷利息，用户可以无限期占用池子流动性，没有还款紧迫感。需要设计利率机制（如基于 util% 的动态利率）来平衡。
       </div>
 
       <div style="color:var(--cyan);font-weight:700;margin-bottom:4px">▎与传统借贷对比</div>
@@ -314,13 +316,14 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
         <div style="background:var(--bg);padding:4px 6px;font-weight:700;color:var(--text)"></div>
         <div style="background:var(--bg);padding:4px 6px;font-weight:700;color:var(--text)">传统借贷 (Aave)</div>
         <div style="background:var(--bg);padding:4px 6px;font-weight:700;color:var(--text)">地板价借贷 (本方案)</div>
-        <div style="background:var(--card2);padding:4px 6px">清算</div><div style="background:var(--card2);padding:4px 6px">有，价格跌就爆</div><div style="background:var(--card2);padding:4px 6px;color:var(--green)">无，不可能清算</div>
-        <div style="background:var(--card);padding:4px 6px">资本效率</div><div style="background:var(--card);padding:4px 6px;color:var(--green)">高（按市价 70-80%）</div><div style="background:var(--card);padding:4px 6px">低（按地板价 20-30%）</div>
-        <div style="background:var(--card2);padding:4px 6px">预言机</div><div style="background:var(--card2);padding:4px 6px">需要</div><div style="background:var(--card2);padding:4px 6px;color:var(--green)">不需要</div>
-        <div style="background:var(--card);padding:4px 6px">流动性</div><div style="background:var(--card);padding:4px 6px;color:var(--green)">借贷池独立</div><div style="background:var(--card);padding:4px 6px">从交易池借，影响卖出</div>
-        <div style="background:var(--card2);padding:4px 6px">核心风险</div><div style="background:var(--card2);padding:4px 6px">个人爆仓</div><div style="background:var(--card2);padding:4px 6px">集体过热 + 流动性枯竭</div>
+        <div style="background:var(--card2);padding:4px 6px">Token 准入</div><div style="background:var(--card2);padding:4px 6px">需投票上架 + 配置预言机</div><div style="background:var(--card2);padding:4px 6px;color:var(--green)">任意 token 自动可借贷</div>
+        <div style="background:var(--card);padding:4px 6px">清算</div><div style="background:var(--card);padding:4px 6px">有，价格跌就爆</div><div style="background:var(--card);padding:4px 6px;color:var(--green)">无，不可能清算</div>
+        <div style="background:var(--card2);padding:4px 6px">资本效率</div><div style="background:var(--card2);padding:4px 6px;color:var(--green)">高（按市价 70-80%）</div><div style="background:var(--card2);padding:4px 6px">中（按地板价 20-40%）</div>
+        <div style="background:var(--card);padding:4px 6px">预言机</div><div style="background:var(--card);padding:4px 6px">需要</div><div style="background:var(--card);padding:4px 6px;color:var(--green)">不需要</div>
+        <div style="background:var(--card2);padding:4px 6px">流动性来源</div><div style="background:var(--card2);padding:4px 6px;color:var(--green)">独立借贷池</div><div style="background:var(--card2);padding:4px 6px">交易池（抵押释放 floor support）</div>
+        <div style="background:var(--card);padding:4px 6px">核心风险</div><div style="background:var(--card);padding:4px 6px">个人爆仓 + 坏账</div><div style="background:var(--card);padding:4px 6px">群体过热 + 卖出流动性不足</div>
       </div>
-      <div style="color:var(--text2);font-size:10px">核心 tradeoff：<span style="color:var(--text)">用资本效率换安全性</span>。对 meme/launchpad 场景，"不会被清算"是强心理安全感卖点，但需防范流动性枯竭和群体正反馈过热。</div>
+      <div style="color:var(--text2);font-size:10px">核心定位：<span style="color:var(--text)">Launchpad 原生借贷层</span>。任意 token 零配置即可借贷，用资本效率换取零清算 + 零预言机的安全性。适合 meme/launchpad 场景下快速启动流动性。</div>
     </div>
   </details>
 </div>
