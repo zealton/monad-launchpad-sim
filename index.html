@@ -108,7 +108,7 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
 <!-- ====== SIDEBAR ====== -->
 <div class="sidebar">
 
-  <!-- Presets — always visible -->
+  <!-- Trade -->
   <div class="card">
     <div class="presets">
       <button onclick="applyPreset('meme')" id="p-meme" class="active">Meme</button>
@@ -124,28 +124,7 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
     </div>
   </div>
 
-  <!-- Auto Sim -->
-  <div class="card">
-    <h3>Auto Simulation</h3>
-    <div class="trade-actions" style="margin-bottom:5px">
-      <button class="btn btn-scene" style="background:var(--green);color:#000" onclick="autoSim('launch')" title="Seed → FOMO → Loop leverage → Profit-taking → 2nd wave">🚀 Launch</button>
-      <button class="btn btn-scene" style="background:var(--cyan);color:#000" onclick="autoSim('mature')" title="50 rounds: 40% buy, 25% sell, 15% loop, 10% whale, 10% whale sell">📈 Mature</button>
-      <button class="btn btn-scene" style="background:var(--red)" onclick="autoSim('crash')" title="Pump+Loop → Peak → Panic sells + Forced repays">💥 Crash</button>
-    </div>
-    <div class="trade-actions" style="margin-bottom:5px">
-      <button class="btn btn-scene" style="background:var(--orange);color:#000" onclick="autoSim('leverage')" title="Accumulate → Aggressive loops → Trading → Conservative loops w/ repay → Cool">🔄 Leverage</button>
-      <button class="btn btn-scene" style="background:var(--pink)" onclick="autoSim('full')" title="Launch → Growth+Loop → Correction+Unwind → Recovery → Maturity (5 phases)">🎲 Full Cycle</button>
-      <button class="btn btn-scene" style="background:var(--accent)" onclick="autoSim('whale')" title="Retail → Whale loop pump → Shake out → Panic → Whale re-accumulate">🐋 Whale</button>
-    </div>
-    <div style="font-size:.58rem;color:var(--text2);line-height:1.5;margin:4px 0">Hover buttons for details. All sims include loop lending.</div>
-    <div class="trade-actions" id="simControls" style="display:none">
-      <button class="btn" style="background:var(--orange);color:#000;flex:1" onclick="pauseSim()" id="pauseBtn">⏸ Pause</button>
-      <button class="btn btn-reset" style="flex:1" onclick="stopSim()">⏹ Stop</button>
-    </div>
-    <div style="font-size:.65rem;color:var(--orange);font-weight:600;margin-top:4px" id="simStatus"></div>
-  </div>
-
-  <!-- Loop Lending — always visible -->
+  <!-- Loop Lending -->
   <div class="card">
     <h3>Loop Lending</h3>
     <div class="loan-row">
@@ -199,6 +178,27 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
       <div class="param-row"><label>borrow APR (%)</label><input type="number" id="p_apr" value="10" min="0" max="100" step="1" onchange="onP()"></div>
     </div>
   </details>
+
+  <!-- Auto Sim — separate from manual ops -->
+  <div class="card">
+    <h3>Auto Simulation</h3>
+    <div class="trade-actions" style="margin-bottom:5px">
+      <button class="btn btn-scene" style="background:var(--green);color:#000" onclick="autoSim('launch')" title="Seed → FOMO → Loop leverage → Profit-taking → 2nd wave">🚀 Launch</button>
+      <button class="btn btn-scene" style="background:var(--cyan);color:#000" onclick="autoSim('mature')" title="100 rounds: 40% buy, 25% sell, 15% loop, 10% whale, 10% whale sell">📈 Mature</button>
+      <button class="btn btn-scene" style="background:var(--red)" onclick="autoSim('crash')" title="Pump+Loop → Peak → Panic sells + Forced repays">💥 Crash</button>
+    </div>
+    <div class="trade-actions" style="margin-bottom:5px">
+      <button class="btn btn-scene" style="background:var(--orange);color:#000" onclick="autoSim('leverage')" title="Accumulate → Aggressive loops → Trading → Conservative loops w/ repay → Cool">🔄 Leverage</button>
+      <button class="btn btn-scene" style="background:var(--pink)" onclick="autoSim('full')" title="Launch → Growth+Loop → Correction+Unwind → Recovery → Maturity (5 phases)">🎲 Full Cycle</button>
+      <button class="btn btn-scene" style="background:var(--accent)" onclick="autoSim('whale')" title="Retail → Whale loop pump → Shake out → Panic → Whale re-accumulate">🐋 Whale</button>
+    </div>
+    <div style="font-size:.58rem;color:var(--text2);line-height:1.5;margin:4px 0">Hover for details. External traders only — won't touch your position.</div>
+    <div class="trade-actions" id="simControls" style="display:none">
+      <button class="btn" style="background:var(--orange);color:#000;flex:1" onclick="pauseSim()" id="pauseBtn">⏸ Pause</button>
+      <button class="btn btn-reset" style="flex:1" onclick="stopSim()">⏹ Stop</button>
+    </div>
+    <div style="font-size:.65rem;color:var(--orange);font-weight:600;margin-top:4px" id="simStatus"></div>
+  </div>
 
 </div>
 
@@ -277,20 +277,20 @@ function initState(){
 }
 
 // === PRICE FIELD ===
-function _x1(fp,m){return(2*fp-fp*.01)/m}
-function _x2(fp,m){return _x1(fp,m)+2/m}
-function _c1(fp,m){return _x1(fp,m)+1/m}
-function _k(fp,m){return _x2(fp,m)*m-fp}
+// Linear bonding curve: price = fp + m * supply
+// - Always monotonically increasing
+// - Floor price guaranteed (price >= fp at all supply levels)
+// - MFR raising fp shifts entire curve up (correct behavior)
+// - Cost to buy = integral of (fp + m*x) dx from supply to supply+amount
+//              = fp*amount + m/2 * ((supply+amount)^2 - supply^2)
+//              = fp*amount + m*amount*(supply + amount/2)
 function price(x,fp,m){
   if(x<=0)return fp;
-  const x1=_x1(fp,m),x2=_x2(fp,m),c1=_c1(fp,m),k=_k(fp,m);
-  if(x<=x1)return fp;
-  if(x<=x2){if(x<c1)return((1-(c1-x)*m)*k)/2+fp;return(((x-c1)*m+1)*k)/2+fp}
-  return x*m;
+  return fp + m * x;
 }
 function integrate(sx,amt,fp,m){
-  const n=Math.max(80,Math.min(600,Math.floor(amt/5000))),dx=amt/n;let t=0;
-  for(let i=0;i<n;i++){const a=sx+i*dx,b=sx+(i+1)*dx;t+=(price(a,fp,m)+price(b,fp,m))/2*dx}return t;
+  // Exact closed-form: no numerical approximation needed
+  return fp * amt + m * amt * (sx + amt / 2);
 }
 
 // === LIQUIDITY & MFR ===
