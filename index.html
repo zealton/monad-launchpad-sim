@@ -75,7 +75,11 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
 .ticker-item{background:var(--card2);border:1px solid var(--border);border-radius:3px;padding:4px 8px;flex:1;min-width:0;text-align:center;cursor:help}
 .ticker-item .tk{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em}
 .ticker-item .tv{font-size:13px;font-weight:700;margin-top:1px;font-variant-numeric:tabular-nums}
-.chart-title{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;cursor:help;border-bottom:1px dashed var(--border);display:inline-block}
+.chart-title{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;cursor:help;border-bottom:1px dashed var(--border);display:inline-block}
+.chart-legend{display:flex;gap:10px;margin:4px 0;flex-wrap:wrap}
+.cl-item{font-size:9px;color:var(--text2);cursor:help;display:flex;align-items:center;gap:3px}
+.cl-item::before{content:'';width:14px;height:3px;background:var(--c);border-radius:1px;flex-shrink:0}
+.cl-item.cl-dash::before{background:repeating-linear-gradient(90deg,var(--c) 0,var(--c) 4px,transparent 4px,transparent 7px)}
 
 /* Charts */
 .chart-wrap{position:relative;height:220px}.chart-wrap canvas{border-radius:3px}
@@ -254,12 +258,28 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
   </div>
 
   <div class="charts-grid">
-    <div class="card"><span class="chart-title" title="Market Price (cyan) vs Floor Price (green, dashed) — Floor Price only goes up via MFR mechanism">Price (MON)</span><div class="chart-wrap"><canvas id="cPrice"></canvas></div></div>
-    <div class="card"><span class="chart-title" title="Total = all MON in pool. Floor Support = floor price × supply (locked). Market Support = Total - Floor (available for lending & price discovery)">Liquidity (MON)</span><div class="chart-wrap"><canvas id="cLiq"></canvas></div></div>
+    <div class="card">
+      <span class="chart-title" title="Market Price (cyan) vs Floor Price (green, dashed) — Floor Price only goes up via MFR mechanism">Price (MON)</span>
+      <div class="chart-legend"><span class="cl-item" style="--c:#22d3ee" title="Current token price on bonding curve = floor price + slope × supply">Market</span><span class="cl-item cl-dash" style="--c:#34d399" title="Minimum guaranteed price — only goes up via MFR, never down. Backed by floor support in pool.">Floor</span></div>
+      <div class="chart-wrap"><canvas id="cPrice"></canvas></div>
+    </div>
+    <div class="card">
+      <span class="chart-title" title="Total = all MON in pool. Floor Support = floor price × supply (locked). Market Support = Total - Floor (available for lending & price discovery)">Liquidity (MON)</span>
+      <div class="chart-legend"><span class="cl-item" style="--c:#845ef7" title="Total MON in bonding curve pool (TVL)">Total</span><span class="cl-item" style="--c:#34d399" title="Floor Support = floor price × supply. Locked portion that guarantees the floor price. Cannot be borrowed.">Floor</span><span class="cl-item" style="--c:#22d3ee" title="Market Support = Total - Floor. Excess liquidity available for price discovery and lending.">Market</span></div>
+      <div class="chart-wrap"><canvas id="cLiq"></canvas></div>
+    </div>
   </div>
   <div class="charts-grid">
-    <div class="card"><span class="chart-title" title="MFR% (orange) = Market Support / Total Liquidity. When MFR exceeds threshold T, floor price auto-increases. FP (green) = Floor Price">MFR & Floor Price</span><div class="chart-wrap"><canvas id="cMFR"></canvas></div></div>
-    <div class="card"><span class="chart-title" title="Debt (pink) = total MON borrowed from pool. Collateral (cyan) = total tokens locked. Util% (orange dashed) = Debt / (Debt + Lendable)">Lending</span><div class="chart-wrap"><canvas id="cLoan"></canvas></div></div>
+    <div class="card">
+      <span class="chart-title" title="MFR% (orange) = Market Support / Total Liquidity. When MFR exceeds threshold T, floor price auto-increases. FP (green) = Floor Price">MFR & Floor Price</span>
+      <div class="chart-legend"><span class="cl-item" style="--c:#fbbf24" title="Market Funding Ratio = Market Support / Total Liquidity. When this exceeds threshold T, floor price is automatically raised.">MFR%</span><span class="cl-item" style="--c:#34d399" title="Floor Price in MON — ratchet mechanism, only increases">FP</span></div>
+      <div class="chart-wrap"><canvas id="cMFR"></canvas></div>
+    </div>
+    <div class="card">
+      <span class="chart-title" title="Debt (pink) = total MON borrowed from pool. Collateral (cyan) = total tokens locked. Util% (orange dashed) = Debt / (Debt + Lendable)">Lending</span>
+      <div class="chart-legend"><span class="cl-item" style="--c:#f472b6" title="Total MON borrowed from pool by all users via loop lending. Reduces pool liquidity until repaid.">Debt (MON)</span><span class="cl-item" style="--c:#22d3ee" title="Total tokens locked as collateral by all users. Valued at floor price for borrowing.">Collateral</span><span class="cl-item cl-dash" style="--c:#f59e0b" title="Utilization Rate = Debt / (Debt + Pool Lendable). Shows how much of the borrowable pool capacity is in use. 100% = fully utilized, no more borrowing.">Util %</span></div>
+      <div class="chart-wrap"><canvas id="cLoan"></canvas></div>
+    </div>
   </div>
   <div class="card" style="padding:8px 10px"><h3 style="margin-bottom:3px">Log</h3><div class="log-area" id="logArea"><div class="log-entry" style="color:var(--text2)">Ready — buy tokens with MON, then leverage via loop lending.</div></div></div>
 </div>
@@ -726,7 +746,7 @@ let cPrice,cLiq,cMFR,cLoan;
 function mkCharts(){
   const pt={pointRadius:0,pointHitRadius:20,pointHoverRadius:5,pointHoverBorderWidth:2};
   const inter={interaction:{mode:'index',intersect:false,axis:'x'},hover:{mode:'index',intersect:false},
-    plugins:{legend:{labels:{color:'#7b7f97',font:{size:9},boxWidth:10}},tooltip:{mode:'index',intersect:false,backgroundColor:'rgba(18,20,31,.95)',titleColor:'#e4e7f1',bodyColor:'#7b7f97',borderColor:'#1f2235',borderWidth:1,padding:7,cornerRadius:5,displayColors:true,boxPadding:2,titleFont:{size:10},bodyFont:{size:10},
+    plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,backgroundColor:'rgba(18,20,31,.95)',titleColor:'#e4e7f1',bodyColor:'#7b7f97',borderColor:'#1f2235',borderWidth:1,padding:7,cornerRadius:5,displayColors:true,boxPadding:2,titleFont:{size:10},bodyFont:{size:10},
       callbacks:{label:ctx=>{let v=ctx.parsed.y;return ctx.dataset.label+': '+(v==null?'∞':v<.01&&v>0?v.toExponential(2):fmt(v))}}},crosshair:{}}};
   const sc={x:{ticks:{color:'#7b7f97',font:{size:8},maxTicksLimit:10},grid:{color:'#1a1d2e'}},y:{ticks:{color:'#7b7f97',font:{size:8}},grid:{color:'#1a1d2e'}}};
   Chart.register({id:'crosshair',afterDraw(ch){const tt=ch.tooltip;if(!tt||!tt.caretX)return;const ctx=ch.ctx;ctx.save();ctx.beginPath();ctx.setLineDash([3,3]);ctx.moveTo(tt.caretX,ch.scales.y.top);ctx.lineTo(tt.caretX,ch.scales.y.bottom);ctx.lineWidth=1;ctx.strokeStyle='rgba(123,127,151,.3)';ctx.stroke();ctx.restore()}});
