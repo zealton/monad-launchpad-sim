@@ -94,6 +94,10 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
 .log-entry{padding:2px 4px;border-bottom:1px solid #1a1a1a;color:var(--text2);border-radius:2px;transition:background .1s}
 .log-entry:hover{background:rgba(132,94,247,.08)}
 
+/* Custom tooltip */
+.tip{position:fixed;z-index:9999;max-width:280px;padding:6px 10px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#d4d4d4;font-size:11px;line-height:1.5;pointer-events:none;opacity:0;transition:opacity .12s;font-family:var(--font);box-shadow:0 4px 12px rgba(0,0,0,.5)}
+.tip.show{opacity:1}
+
 @media(max-width:900px){.layout{grid-template-columns:1fr}.sidebar{max-height:none;border-right:none;border-bottom:1px solid var(--border)}.ticker{grid-template-columns:repeat(3,1fr)}}
 </style>
 </head>
@@ -777,6 +781,35 @@ const P={
 function applyPreset(n){const p=P[n];document.getElementById('p_slope').value=p.slope;document.getElementById('p_fp').value=p.fp;document.getElementById('p_supply').value=p.supply;document.getElementById('p_liq').value=p.liq;document.getElementById('p_t').value=p.t;document.getElementById('p_x').value=p.x;document.getElementById('p_c').value=p.c;document.getElementById('p_maxT').value=p.maxT;document.getElementById('p_minT').value=p.minT;document.getElementById('p_buyFee').value=p.buyFee;document.getElementById('p_sellFee').value=p.sellFee;document.getElementById('p_ltv').value=p.ltv;document.getElementById('p_apr').value=p.apr;document.querySelectorAll('.presets button').forEach(b=>b.classList.remove('active'));document.getElementById('p-'+n).classList.add('active');initState()}
 function onP(){document.querySelectorAll('.presets button').forEach(b=>b.classList.remove('active'));initState()}
 function reset(){initState();logs=[];document.getElementById('logArea').innerHTML='<div class="log-entry" style="color:var(--text2)">Reset.</div>'}
+
+// === CUSTOM TOOLTIP (instant, styled) ===
+(function(){
+  const tip=document.createElement('div');tip.className='tip';document.body.appendChild(tip);
+  // Convert all title attrs to data-tip (prevents native tooltip)
+  document.querySelectorAll('[title]').forEach(el=>{
+    el.setAttribute('data-tip',el.getAttribute('title'));
+    el.removeAttribute('title');
+  });
+  let active=null;
+  document.addEventListener('mouseover',e=>{
+    const el=e.target.closest('[data-tip]');
+    if(!el){tip.classList.remove('show');active=null;return}
+    if(el===active)return;
+    active=el;tip.textContent=el.getAttribute('data-tip');tip.classList.add('show');
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!active)return;
+    const x=e.clientX,y=e.clientY;
+    const tw=tip.offsetWidth,th=tip.offsetHeight;
+    const vw=window.innerWidth,vh=window.innerHeight;
+    tip.style.left=Math.min(x+12,vw-tw-8)+'px';
+    tip.style.top=(y+16+th>vh?y-th-8:y+16)+'px';
+  });
+  document.addEventListener('mouseout',e=>{
+    const el=e.target.closest('[data-tip]');
+    if(el===active){tip.classList.remove('show');active=null}
+  });
+})();
 
 mkCharts();initState();
 </script>
