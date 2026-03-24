@@ -153,10 +153,11 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
     <summary>Bonding Curve Params</summary>
     <div class="det-body">
       <div class="presets" style="margin-bottom:8px">
-        <button onclick="applyPreset('meme')" id="p-meme" class="active">Meme</button>
-        <button onclick="applyPreset('defi')" id="p-defi">DeFi</button>
-        <button onclick="applyPreset('nft')" id="p-nft">NFT</button>
-        <button onclick="applyPreset('infra')" id="p-infra">Infra</button>
+        <button onclick="applyPreset('meme')" id="p-meme" class="active" title="High slope, low fp — volatile meme token">Meme</button>
+        <button onclick="applyPreset('defi')" id="p-defi" title="Medium slope, moderate fees — DeFi protocol token">DeFi</button>
+        <button onclick="applyPreset('nft')" id="p-nft" title="Very high slope, high fees — NFT collection token">NFT</button>
+        <button onclick="applyPreset('infra')" id="p-infra" title="Low slope, low fees — infrastructure token">Infra</button>
+        <button onclick="applyPreset('hieff')" id="p-hieff" title="Low slope + aggressive MFR (T=10%, X=15%) — floor price chases market price fast, higher capital efficiency but pool lendable drains faster" style="color:var(--orange)">Hi-Eff</button>
       </div>
       <div class="param-row"><label title="Controls how fast price rises with supply. Higher = steeper curve, more price impact per trade.">slope (m) ×10⁻¹⁰</label><input type="number" id="p_slope" value="80" min="1" max="1000" step="1" onchange="onP()"></div>
       <div class="param-row"><label title="Initial floor price in MON. Minimum guaranteed price — can only go up via MFR, never down.">floor price (MON)</label><input type="number" id="p_fp" value="0.001" min="0.0001" max="100" step="0.0001" onchange="onP()"></div>
@@ -227,6 +228,7 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
       <div class="ticker-item" title="Market Funding Ratio — % of pool that is market support (above floor)"><div class="tk">MFR</div><div class="tv orange" id="s_mfr">—</div></div>
       <div class="ticker-item" title="Total system debt — MON borrowed from pool via loop lending"><div class="tk">Debt</div><div class="tv pink" id="s_debt">—</div></div>
       <div class="ticker-item" title="Total cumulative trading volume in MON"><div class="tk">Vol</div><div class="tv" id="s_vol">—</div></div>
+      <div class="ticker-item" title="Floor / Market Price ratio — measures capital efficiency. Higher = can borrow more per token. At 50% you can borrow half the market value."><div class="tk">FP/MP</div><div class="tv" id="s_fpmp" style="color:var(--orange)">—</div></div>
       <div class="ticker-item" title="Total cumulative fees collected in MON"><div class="tk">Fees</div><div class="tv" id="s_fees">—</div></div>
     </div>
   </div>
@@ -712,6 +714,7 @@ function updateUI(){
   document.getElementById('s_mfr').textContent=(mfr*100).toFixed(1)+'%';
   document.getElementById('s_debt').textContent=fmt(S.debt);
   document.getElementById('s_vol').textContent=fmt(S.totalVol);
+  document.getElementById('s_fpmp').textContent=mp>0?(S.fp/mp*100).toFixed(1)+'%':'—';
   document.getElementById('s_fees').textContent=fmt(S.totalFees);
   // My Position section
   document.getElementById('s_bal').textContent=fmt(S.userMON);
@@ -836,6 +839,7 @@ const P={
   defi:{slope:30,fp:.01,supply:0,liq:0,t:25,x:3,c:1.5,maxT:45,minT:15,buyFee:.5,sellFee:1,ltv:80,apr:8},
   nft:{slope:150,fp:.1,supply:0,liq:0,t:35,x:8,c:3,maxT:55,minT:25,buyFee:2,sellFee:3,ltv:60,apr:15},
   infra:{slope:15,fp:.005,supply:0,liq:0,t:20,x:2,c:1,maxT:40,minT:10,buyFee:.3,sellFee:.5,ltv:90,apr:5},
+  hieff:{slope:10,fp:.01,supply:0,liq:0,t:10,x:15,c:1,maxT:25,minT:5,buyFee:.5,sellFee:1,ltv:100,apr:5},
 };
 function applyPreset(n){const p=P[n];document.getElementById('p_slope').value=p.slope;document.getElementById('p_fp').value=p.fp;document.getElementById('p_supply').value=p.supply;document.getElementById('p_liq').value=p.liq;document.getElementById('p_t').value=p.t;document.getElementById('p_x').value=p.x;document.getElementById('p_c').value=p.c;document.getElementById('p_maxT').value=p.maxT;document.getElementById('p_minT').value=p.minT;document.getElementById('p_buyFee').value=p.buyFee;document.getElementById('p_sellFee').value=p.sellFee;document.getElementById('p_ltv').value=p.ltv;document.getElementById('p_apr').value=p.apr;document.querySelectorAll('.presets button').forEach(b=>b.classList.remove('active'));document.getElementById('p-'+n).classList.add('active');initState()}
 function onP(){document.querySelectorAll('.presets button').forEach(b=>b.classList.remove('active'));initState()}
