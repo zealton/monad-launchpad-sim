@@ -62,7 +62,8 @@ function getLiq(S) {
 }
 
 function poolLendable(S) {
-  return Math.max(0, S.liq - S.fp * S.supply - S.debt);
+  const freeFloat = S.supply - S.sysCollateral;
+  return Math.max(0, S.liq - S.fp * freeFloat - S.debt);
 }
 
 function autoUpFP(S) {

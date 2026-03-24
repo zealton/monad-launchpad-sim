@@ -379,7 +379,13 @@ function doTrade(side){
 // Borrowed MON comes FROM the pool liquidity (market support portion only).
 // Floor support (fp * supply) is untouchable — it guarantees the floor price.
 // Available to lend = pool liquidity - floor support - existing debt already lent out
-function poolLendable(){return Math.max(0, S.liq - S.fp*S.supply - S.debt)}
+// Lendable = pool MON minus floor support for FREE tokens only.
+// Collateralized tokens are locked and can't redeem at floor price,
+// so their floor support portion is freed up and available to lend.
+function poolLendable(){
+  const freeFloat=S.supply-S.sysCollateral; // tokens NOT locked as collateral
+  return Math.max(0, S.liq - S.fp*freeFloat - S.debt);
+}
 function borrowCap(){return Math.min(S.collateral*S.fp*S.ltv, S.debt+poolLendable())}
 function hf(){if(S.debt<=0)return Infinity;return(S.collateral+S.sysCollateral)*S.fp*S.ltv/S.debt}
 function doLend(a){
