@@ -219,7 +219,8 @@ const chartOpts=(ylabel)=>({
 
 const priceChart=new Chart(el('priceChart'),{type:'line',data:{labels:[],datasets:[
   {label:'Market Price',data:[],borderColor:'#10b981',backgroundColor:'#10b98130',fill:true,pointRadius:0,borderWidth:1.5},
-  {label:'Floor Price',data:[],borderColor:'#06b6d4',borderDash:[5,3],pointRadius:0,borderWidth:1.5,fill:false}
+  {label:'Initial Floor',data:[],borderColor:'#06b6d4',borderDash:[5,3],pointRadius:0,borderWidth:1,fill:false},
+  {label:'Floor (with MFR)',data:[],borderColor:'#f59e0b',pointRadius:0,borderWidth:2,fill:false}
 ]},options:chartOpts('Price (MON)')});
 
 const costChart=new Chart(el('costChart'),{type:'line',data:{labels:[],datasets:[
@@ -253,18 +254,23 @@ function update(){
   el('supplyVal').textContent=cursorPct+'% ('+fmtN(cursor)+')';
 
   // Generate data points — labels are percentages
+  // Simulate MFR along the way to compute dynamic floor price
   const steps=200;
-  const labels=[],prices=[],floors=[],tvls=[],floorSups=[],mktSups=[],mcTvls=[],fpMps=[];
+  const labels=[],prices=[],floors=[],dynFloors=[],tvls=[],floorSups=[],mktSups=[],mcTvls=[],fpMps=[];
+  const mfrT0=0.20, mfrX=0.08, mfrC=0.02, mfrMaxT=0.50, mfrMinT=0.15;
+  let dynFP=P.fp, dynLiq=0, mfrT=mfrT0, blocksSince=0;
 
   for(let i=0;i<=steps;i++){
     const pct=100*i/steps;
     const x=maxS*i/steps;
     labels.push(Math.round(pct*10)/10);
+
+    // Static curve (original fp, no MFR)
     const p=price(x,P);
     const t=tvl(x,P);
     const fs=P.fp*x;
     const ms=Math.max(0,t-fs);
-    const mc=p*P.totalSupply; // MC = price × total 1B supply, not just traded
+    const mc=p*P.totalSupply;
     prices.push(p);
     floors.push(P.fp);
     tvls.push(t);
@@ -272,12 +278,35 @@ function update(){
     mktSups.push(ms);
     mcTvls.push(t>0?mc/t:0);
     fpMps.push(p>0?P.fp/p*100:0);
+
+    // Dynamic fp via MFR simulation (as if buying from 0 to x incrementally)
+    if(i>0){
+      const prevX=maxS*(i-1)/steps;
+      const dx=x-prevX;
+      const cost=dynFP*dx+P.m*(Math.pow(x,P.n+1)-Math.pow(prevX,P.n+1))/(P.n+1);
+      dynLiq+=cost;
+      // MFR check
+      const dynFS=dynFP*x;
+      const dynMS=Math.max(0,dynLiq-dynFS);
+      const mfr=dynLiq>0?dynMS/dynLiq:0;
+      if(mfr>mfrT&&x>0){
+        const newFP=(dynFS+dynMS*mfrX)/x;
+        if(newFP>dynFP) dynFP=newFP;
+        mfrT=Math.min(mfrT+mfrC,mfrMaxT);
+        blocksSince=0;
+      } else {
+        blocksSince++;
+        if(blocksSince>=3){mfrT=Math.max(mfrT-mfrC,mfrMinT);blocksSince=0}
+      }
+    }
+    dynFloors.push(dynFP);
   }
 
   // Update charts
   priceChart.data.labels=labels;
   priceChart.data.datasets[0].data=prices;
   priceChart.data.datasets[1].data=floors;
+  priceChart.data.datasets[2].data=dynFloors;
   priceChart.update();
 
   costChart.data.labels=labels;
@@ -302,11 +331,14 @@ function update(){
   const cmc=cp*P.totalSupply;
   const cRatio=ct>0?cmc/ct:0;
 
+  // Get dynamic fp at cursor from simulated data
+  const cursorIdx=Math.round(cursorPct/100*steps);
+  const cursorDynFP=dynFloors[Math.min(cursorIdx,steps)];
   el('dPrice').innerHTML=fmtP(cp)+' MON';
   el('dPriceUSD').innerHTML=fmt$(cp*P.monUSD);
-  el('dFloor').innerHTML=fmtP(P.fp)+' MON';
-  el('dFloorUSD').innerHTML=fmt$(P.fp*P.monUSD);
-  el('dFPMP').textContent=(cp>0?(P.fp/cp*100).toFixed(1):0)+'%';
+  el('dFloor').innerHTML=fmtP(cursorDynFP)+' MON <span style="color:var(--text2);font-size:9px">(init: '+fmtP(P.fp)+')</span>';
+  el('dFloorUSD').innerHTML=fmt$(cursorDynFP*P.monUSD);
+  el('dFPMP').textContent=(cp>0?(cursorDynFP/cp*100).toFixed(1):0)+'%';
   el('dMC').innerHTML=fmt$(cmc*P.monUSD);
   el('dMCSub').textContent=fmtN(cmc)+' MON';
   el('dTVL').innerHTML=fmt$(ct*P.monUSD);
