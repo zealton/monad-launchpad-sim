@@ -108,8 +108,8 @@ tr:hover{background:var(--card2)}
     <label>Sell Fee</label>
     <input type="number" id="sellFee" value="0.015" step="0.005">
   </div>
-  <div class="ctrl-group" style="min-width:280px">
-    <label>Supply Position</label>
+  <div class="ctrl-group" style="min-width:360px">
+    <label>Supply Position <span style="color:var(--text2);font-weight:400">(% of bonding curve, not total supply)</span></label>
     <div class="slider-wrap">
       <input type="range" id="supplySlider" min="0" max="100" value="40" step="1">
       <span class="slider-val" id="supplyVal">40%</span>
@@ -153,7 +153,7 @@ tr:hover{background:var(--card2)}
   <h3>Supply Breakdown Table</h3>
   <table>
     <thead><tr>
-      <th>% Supply</th>
+      <th>% Curve (% Total)</th>
       <th>Price (MON)</th>
       <th>Price ($)</th>
       <th>Avg Price ($)</th>
@@ -208,7 +208,7 @@ const chartOpts=(ylabel)=>({
   interaction:{mode:'index',intersect:false},
   plugins:{legend:{labels:{color:'#666',font:{family:"'JetBrains Mono'",size:10},boxWidth:12,padding:8}},tooltip:{callbacks:{title:items=>{const pct=items[0].label;const P=getParams();const maxS=P.gradSupply>0?P.gradSupply:793100000;return pct+'% = '+fmtN(maxS*parseFloat(pct)/100)+' tokens (of graduation)'},label:item=>{const v=item.raw;const label=item.dataset.label||'';return label+': '+fmtSubPlain(v)}}}},
   scales:{
-    x:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9},maxTicksLimit:15,callback:function(val,idx){const l=this.getLabelForValue(val);return l+'%'}},title:{display:true,text:'% of Max Supply',color:'#555',font:{family:"'JetBrains Mono'",size:9}}},
+    x:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9},maxTicksLimit:15,callback:function(val,idx){const l=this.getLabelForValue(val);return l+'%'}},title:{display:true,text:'% of Bonding Curve (100% = Graduation)',color:'#555',font:{family:"'JetBrains Mono'",size:9}}},
     y:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9}},title:{display:true,text:ylabel,color:'#555',font:{family:"'JetBrains Mono'",size:9}}}
   }
 });
@@ -247,7 +247,8 @@ function update(){
   const cursorPct=parseInt(el('supplySlider').value);
   const maxS=P.gradSupply>0?P.gradSupply:793100000; // 100% = graduation supply
   const cursor=maxS*cursorPct/100;
-  el('supplyVal').textContent=cursorPct+'% ('+fmtN(cursor)+')';
+  const totalPct=(cursor/P.totalSupply*100).toFixed(1);
+  el('supplyVal').innerHTML='<b>'+cursorPct+'%</b> curve <span style="color:var(--text2)">('+totalPct+'% total = '+fmtN(cursor)+')</span>';
 
   // Generate data points — labels are percentages
   // Simulate MFR along the way to compute dynamic floor price
@@ -359,8 +360,9 @@ function update(){
     const avg=s>0?t/s:0;
     const buy100k=buyCostAt(s,100000,P);
     const isHighlight=Math.abs(pct-cursorPct)<=2;
+    const totalPctRow=(s/P.totalSupply*100).toFixed(1);
     html+=`<tr${isHighlight?' class="highlight"':''}>
-      <td>${pct}% (${fmtN(s)})</td>
+      <td>${pct}% <span style="color:var(--text2)">(${totalPctRow}%)</span> ${fmtN(s)}</td>
       <td class="col-price">${fmtP(p)}</td>
       <td class="col-price">${fmt$(p*P.monUSD)}</td>
       <td>${fmt$(avg*P.monUSD)}</td>
