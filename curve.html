@@ -208,7 +208,7 @@ function buyCostAt(sx,amt,P){const n1=P.n+1;return P.fp*amt+P.m*(Math.pow(sx+amt
 const chartOpts=(ylabel)=>({
   responsive:true,maintainAspectRatio:false,
   interaction:{mode:'index',intersect:false},
-  plugins:{legend:{labels:{color:'#666',font:{family:"'JetBrains Mono'",size:10},boxWidth:12,padding:8}},tooltip:{callbacks:{title:items=>{const pct=items[0].label;const maxS=parseFloat(document.getElementById('maxSupply').value)||1e9;return pct+'% = '+fmtN(maxS*parseFloat(pct)/100)+' tokens'}}}},
+  plugins:{legend:{labels:{color:'#666',font:{family:"'JetBrains Mono'",size:10},boxWidth:12,padding:8}},tooltip:{callbacks:{title:items=>{const pct=items[0].label;const maxS=parseFloat(document.getElementById('maxSupply').value)||1e9;return pct+'% = '+fmtN(maxS*parseFloat(pct)/100)+' tokens'},label:item=>{const v=item.raw;const label=item.dataset.label||'';if(v===0)return label+': 0';if(Math.abs(v)<0.001)return label+': '+v.toExponential(3);if(Math.abs(v)<1)return label+': '+v.toFixed(6);return label+': '+fmtN(v)}}}},
   scales:{
     x:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9},maxTicksLimit:15,callback:function(val,idx){const l=this.getLabelForValue(val);return l+'%'}},title:{display:true,text:'% of Max Supply',color:'#555',font:{family:"'JetBrains Mono'",size:9}}},
     y:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9}},title:{display:true,text:ylabel,color:'#555',font:{family:"'JetBrains Mono'",size:9}}}
