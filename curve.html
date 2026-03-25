@@ -32,7 +32,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .chart-box{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:12px}
 .chart-box h3{font-size:11px;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.03em}
 .chart-wrap{height:280px;position:relative}
-.dash{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px}
+.dash{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:12px}
 .dash-item{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center}
 .dash-item .label{font-size:9px;color:var(--text2);text-transform:uppercase;margin-bottom:2px}
 .dash-item .val{font-size:14px;font-weight:700}
@@ -97,6 +97,10 @@ tr:hover{background:var(--card2)}
     <input type="number" id="monPrice" value="0.025" step="0.001">
   </div>
   <div class="ctrl-group">
+    <label>Graduation MC ($)</label>
+    <input type="number" id="gradMC" value="69000" step="1000">
+  </div>
+  <div class="ctrl-group">
     <label>Buy Fee</label>
     <input type="number" id="buyFee" value="0.01" step="0.005">
   </div>
@@ -125,6 +129,7 @@ tr:hover{background:var(--card2)}
   <div class="dash-item"><div class="label">Market Cap</div><div class="val col-mc" id="dMC">—</div><div class="sub" id="dMCSub">—</div></div>
   <div class="dash-item"><div class="label">TVL</div><div class="val col-liq" id="dTVL">—</div><div class="sub" id="dTVLSub">—</div></div>
   <div class="dash-item"><div class="label">MC / TVL</div><div class="val" id="dRatio">—</div><div class="sub">Capital efficiency</div></div>
+  <div class="dash-item"><div class="label">🎓 Grad Point</div><div class="val col-mc" id="dGrad">—</div><div class="sub" id="dGradSub">—</div></div>
 </div>
 
 <!-- Charts -->
@@ -184,8 +189,15 @@ function getParams(){
   const monUSD=parseFloat(el('monPrice').value)||0.025;
   const buyFee=parseFloat(el('buyFee').value)||0.01;
   const sellFee=parseFloat(el('sellFee').value)||0.015;
-  const totalSupply=1_000_000_000; // 1B total, MC = price × totalSupply
-  return{n,fp,m,monUSD,buyFee,sellFee,totalSupply};
+  const gradMC_USD=parseFloat(el('gradMC').value)||69000;
+  const totalSupply=1_000_000_000;
+  const gradMC_MON=gradMC_USD/monUSD;
+  // Graduation price: MC = price × totalSupply = gradMC → price = gradMC/totalSupply
+  const gradPrice=gradMC_MON/totalSupply;
+  // Solve: fp + m × S^n = gradPrice → S = ((gradPrice - fp) / m)^(1/n)
+  const gradSupply=(gradPrice>fp&&m>0)?Math.pow((gradPrice-fp)/m,1/n):0;
+  const gradPct=gradSupply>0?(gradSupply/(parseFloat(el('maxSupply').value)||1e9)*100):0;
+  return{n,fp,m,monUSD,buyFee,sellFee,totalSupply,gradMC_USD,gradSupply,gradPct};
 }
 
 function price(x,P){return P.fp+P.m*Math.pow(x,P.n)}
@@ -299,6 +311,10 @@ function update(){
   el('dTVLSub').textContent=fmtN(ct)+' MON';
   el('dRatio').textContent=cRatio.toFixed(2)+'x';
 
+  // Graduation info
+  el('dGrad').textContent=P.gradPct>0?P.gradPct.toFixed(1)+'%':'—';
+  el('dGradSub').textContent=P.gradSupply>0?fmtN(P.gradSupply)+' tokens | MC=$'+fmtN(P.gradMC_USD):'—';
+
   // Table — percentage based
   const pcts=[1,2,5,10,15,20,25,30,40,50,60,70,79.3,80,90,100];
   const tableSupplies=pcts.map(p=>({pct:p,supply:Math.round(maxS*p/100)})).filter(r=>r.supply<=maxS);
@@ -346,7 +362,7 @@ el('curveN').addEventListener('change',()=>{
 });
 
 // Bind all inputs
-['curveN','fp','slopeM','monPrice','buyFee','sellFee','supplySlider','maxSupply'].forEach(id=>{
+['curveN','fp','slopeM','monPrice','gradMC','buyFee','sellFee','supplySlider','maxSupply'].forEach(id=>{
   el(id).addEventListener('input',update);
 });
 

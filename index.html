@@ -353,7 +353,8 @@ function initState(){
     maxT:gp('p_maxT')/100,minT:gp('p_minT')/100,
     buyFee:gp('p_buyFee')/100,sellFee:gp('p_sellFee')/100,
     ltv:gp('p_ltv')/100,apr:gp('p_apr')/100,
-    collateral:0,sysCollateral:0,debt:0,userDebt:0,userTokens:0,userMON:100000,blocksSinceMFR:0,totalFees:0,totalVol:0}; // 100K MON ≈ $2,500
+    collateral:0,sysCollateral:0,debt:0,userDebt:0,userTokens:0,userMON:100000,blocksSinceMFR:0,totalFees:0,totalVol:0,
+    graduated:false,gradMC:69000/0.025,totalSupply:1e9}; // gradMC in MON, totalSupply=1B
   H=initH();logs=[];stepMap={};step=0;record();updateUI();
 }
 
@@ -381,10 +382,22 @@ function autoUpFP(){
   else{S.blocksSinceMFR++;if(S.blocksSinceMFR>=3)S.tMFR=Math.max(S.tMFR-S.cMFR,S.minT)}
 }
 
+// === GRADUATION CHECK ===
+function checkGraduation(){
+  if(S.graduated)return;
+  const mp=price(S.supply,S.fp,S.m);
+  const mc=mp*S.totalSupply;
+  if(mc>=S.gradMC){
+    S.graduated=true;
+    log(`🎓 GRADUATED! MC=${fmt$(mc*0.025)} | FP frozen at ${fmtP(S.fp)} MON | Curve frozen — trade on DEX`,'mfr');
+  }
+}
+
 // === TRADING ===
 function doTrade(side){
   const amt=getInputVal('tradeAmt');if(!amt||amt<=0)return;
-  if(side==='buy'){const c=integrate(S.supply,amt,S.fp,S.m),f=c*S.buyFee,t=c+f;if(S.userMON<t){log(`Not enough MON (need ${fmt(t)}, have ${fmt(S.userMON)})`,'sell');return}S.supply+=amt;S.liq+=c;S.totalFees+=f;S.totalVol+=c;S.userTokens+=amt;S.userMON-=t;log(`BUY ${fmt(amt)} @ ${fmtP(c/amt)} | Cost ${fmt(t)} MON`,'buy');autoUpFP()}
+  if(S.graduated){log('Curve graduated — trading frozen. Use DEX.','sell');return}
+  if(side==='buy'){const c=integrate(S.supply,amt,S.fp,S.m),f=c*S.buyFee,t=c+f;if(S.userMON<t){log(`Not enough MON (need ${fmt(t)}, have ${fmt(S.userMON)})`,'sell');return}S.supply+=amt;S.liq+=c;S.totalFees+=f;S.totalVol+=c;S.userTokens+=amt;S.userMON-=t;log(`BUY ${fmt(amt)} @ ${fmtP(c/amt)} | Cost ${fmt(t)} MON`,'buy');autoUpFP();checkGraduation()}
   else{const free=S.userTokens,sa=Math.min(amt,free,S.supply);if(sa<=0){log('No tokens to sell','sell');return}let p=integrate(S.supply-sa,sa,S.fp,S.m),f=p*S.sellFee,n=p-f;if(n>S.liq){n=S.liq;f=n*S.sellFee/(1-S.sellFee);p=n+f}S.supply-=sa;S.liq-=n;S.totalFees+=f;S.totalVol+=p;S.userTokens-=sa;S.userMON+=n;log(`SELL ${fmt(sa)} @ ${fmtP(p/sa)} | Recv ${fmt(n)} MON`,'sell');autoUpFP()}
   record();updateUI();
 }
@@ -637,13 +650,15 @@ async function autoSim(type){
 function rnd(min,max){return Math.floor(min+Math.random()*(max-min))}
 
 function doBuy(amt){
+  if(S.graduated)return;
   const c=integrate(S.supply,amt,S.fp,S.m),f=c*S.buyFee;
   S.supply+=amt;S.liq+=c;S.totalFees+=f;S.totalVol+=c;
   log(`BUY ${fmt(amt)} @ ${fmtP(c/amt)}`,'buy');
-  autoUpFP();record();updateUI();
+  autoUpFP();checkGraduation();record();updateUI();
 }
 
 function doSell(amt){
+  if(S.graduated)return;
   const sa=Math.min(amt,S.supply);if(sa<=0)return;
   let p=integrate(S.supply-sa,sa,S.fp,S.m),f=p*S.sellFee,n=p-f;
   if(n>S.liq){n=S.liq;f=n*S.sellFee/(1-S.sellFee);p=n+f}
@@ -735,15 +750,15 @@ function fmtP(n){return n<.001?n.toExponential(2):n<1?n.toFixed(4):n<1e3?n.toFix
 function fmtPDual(mon){return fmtP(mon)+' <span style="color:var(--text2);font-size:9px">('+fmtUSD(mon)+')</span>'}
 function updateUI(){
   const{total,floorSup,mktSup,mfr}=getLiq(),mp=price(S.supply,S.fp,S.m);
-  const mc=mp*S.supply; // Market Cap = price × supply
-  const fmc=S.fp*S.supply; // Floor MC = floor price × supply
+  const mc=mp*S.totalSupply; // MC = price × 1B (all tokens at current price)
+  const fmc=S.fp*S.totalSupply; // Floor MC = fp × 1B
   const tokenVal=(S.userTokens+S.collateral)*mp;
   const netWorth=S.userMON+tokenVal-S.userDebt;
 
   // Token section — dual MON (USD) display
   document.getElementById('s_mp').innerHTML=fmtPDual(mp);
   document.getElementById('s_fp').innerHTML=fmtPDual(S.fp);
-  document.getElementById('s_mc').innerHTML=fmtDual(mc);
+  document.getElementById('s_mc').innerHTML=fmtDual(mc)+(S.graduated?' 🎓':'');
   document.getElementById('s_fmc').innerHTML=fmtDual(fmc);
   document.getElementById('s_supply').textContent=fmt(S.supply);
   document.getElementById('s_liq').innerHTML=fmtDual(total);
