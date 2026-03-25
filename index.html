@@ -20,7 +20,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .tag-mon{background:var(--mon);color:#000}.tag-new{background:#1a1a1a;color:var(--cyan);border:1px solid var(--cyan)}
 
 /* Layout */
-.layout{display:grid;grid-template-columns:280px 1fr;height:calc(100vh - 36px)}
+.tabs{display:flex;gap:0;padding:0 16px;background:var(--card);border-bottom:1px solid var(--border)}
+.tab{padding:8px 16px;font-size:11px;font-weight:600;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;font-family:var(--font);transition:all .15s;text-decoration:none}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--green);border-bottom-color:var(--green)}
+.layout{display:grid;grid-template-columns:280px 1fr;height:calc(100vh - 68px)}
 .sidebar{border-right:1px solid var(--border);padding:8px;overflow-y:auto;background:var(--card)}
 .main{padding:10px;overflow-y:auto}
 
@@ -111,6 +115,12 @@ details .det-body{background:var(--card2);border:1px solid var(--border);border-
   <h1>Monad Launchpad Simulator</h1>
   <span class="tag tag-mon">MON</span>
   <span class="tag tag-new">Bonding Curve + Loop Lending</span>
+</div>
+<div class="tabs">
+  <a class="tab active" href="index.html">Simulator</a>
+  <a class="tab" href="curve.html">Curve Explorer</a>
+  <a class="tab" href="chips.html">Chip Analysis</a>
+  <a class="tab" href="test.html">Tests</a>
 </div>
 
 <div class="layout">

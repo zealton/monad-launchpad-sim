@@ -76,6 +76,7 @@ tbody tr.highlight{background:#10b98115}
 </div>
 <div class="tabs">
   <a class="tab" href="index.html">Simulator</a>
+  <a class="tab" href="curve.html">Curve Explorer</a>
   <a class="tab active" href="chips.html">Chip Analysis</a>
   <a class="tab" href="test.html">Tests</a>
 </div>
@@ -85,7 +86,7 @@ tbody tr.highlight{background:#10b98115}
 <!-- Controls -->
 <div class="controls">
   <div class="ctrl-group">
-    <label>Target % of Supply</label>
+    <label>Target % of Tradeable Supply (79.3% of total)</label>
     <div class="slider-wrap">
       <input type="range" id="targetPct" min="1" max="100" value="90">
       <span class="slider-val" id="targetPctVal">90%</span>
@@ -97,7 +98,7 @@ tbody tr.highlight{background:#10b98115}
   </div>
   <div class="ctrl-group">
     <label>MON Price (USD)</label>
-    <input type="number" id="monPrice" value="0.40" step="0.01">
+    <input type="number" id="monPrice" value="0.025" step="0.01">
   </div>
   <div class="ctrl-group">
     <label>Our Curve Power (n)</label>
@@ -109,8 +110,8 @@ tbody tr.highlight{background:#10b98115}
     </select>
   </div>
   <div class="ctrl-group">
-    <label>Our Floor Price (MON)</label>
-    <input type="number" id="ourFP" value="0.00345" step="0.0001">
+    <label>Floor / Grad Price Ratio</label>
+    <input type="number" id="ourFP" value="0.025" step="0.005" min="0.001" max="0.5">
   </div>
   <div class="ctrl-group">
     <label>Our Graduation MC ($)</label>
@@ -144,7 +145,7 @@ tbody tr.highlight{background:#10b98115}
   <table>
     <thead>
       <tr>
-        <th>% Supply</th>
+        <th>% Tradeable</th>
         <th>Pump.fun (SOL)</th>
         <th>Pump.fun (USD)</th>
         <th>Ours (MON)</th>
@@ -187,18 +188,20 @@ function pumpPriceAt(tokensBought) {
 // ========== Our Model ==========
 function getOurParams() {
   const n = parseInt(el('curveN').value);
-  const fp = parseFloat(el('ourFP').value) || 0.00345;
-  const gradMC = (parseFloat(el('ourGradMC').value) || 69000) / (parseFloat(el('monPrice').value) || 0.40);
-  // Calibrate: at graduation supply S_grad, MC = gradMC
-  // MC = (fp + m * S^n) * S = gradMC
-  // We need to pick S_grad. Use same as pump: ~793M tradeable? No, use 20M (our scale)
-  // Actually, let's back-calculate from pump.fun's graduation MC to match
-  // Pump graduation MC = 411 SOL ≈ $53K. Ours target = gradMC in MON.
-  // Let S_grad = 20M (our standard scale)
-  const S_grad = 20_000_000;
-  const targetPrice = gradMC / S_grad;
-  const m = (targetPrice - fp) / Math.pow(S_grad, n);
-  return { n, fp, m, S_grad, totalSupply: S_grad }; // all tradeable
+  const monUSD = parseFloat(el('monPrice').value) || 0.025;
+  const gradMC_USD = parseFloat(el('ourGradMC').value) || 69000;
+  const gradMC = gradMC_USD / monUSD;
+  // Match pump.fun: 1B total, ~793M tradeable on curve
+  const totalSupply = 1_000_000_000;
+  const realTokens = 793_100_000;
+  // Graduation price per token
+  const gradPrice = gradMC / totalSupply;
+  // fp = 2.5% of graduation price (same ratio as 20M model: 0.00345/0.138 ≈ 2.5%)
+  const fpRatio = parseFloat(el('ourFP').value) || 0.025;
+  const fp = gradPrice * fpRatio;
+  // Calibrate m so price at full curve = gradPrice
+  const m = (gradPrice - fp) / Math.pow(realTokens, n);
+  return { n, fp, m, S_grad: realTokens, totalSupply, realTokens, fpRatio };
 }
 
 function ourCostToBuy(tokens, params) {
@@ -225,7 +228,7 @@ const chartOpts = (ylabel) => ({
   interaction: { mode: 'index', intersect: false },
   plugins: { legend: { labels: { color: '#666', font: { family: "'JetBrains Mono'", size: 10 }, boxWidth: 12, padding: 8 } } },
   scales: {
-    x: { grid: { color: '#1a1a1a' }, ticks: { color: '#666', font: { family: "'JetBrains Mono'", size: 9 }, callback: v => v + '%' } },
+    x: { grid: { color: '#1a1a1a' }, ticks: { color: '#666', font: { family: "'JetBrains Mono'", size: 9 }, callback: v => v + '%' }, title: { display: true, text: '% of Tradeable Supply (79.3% of 1B)', color: '#555', font: { family: "'JetBrains Mono'", size: 9 } } },
     y: { grid: { color: '#1a1a1a' }, ticks: { color: '#666', font: { family: "'JetBrains Mono'", size: 9 }, callback: v => fmt$(v) }, title: { display: true, text: ylabel, color: '#666', font: { family: "'JetBrains Mono'", size: 9 } } }
   }
 });
@@ -274,7 +277,7 @@ Chart.register(verticalLinePlugin);
 
 function update() {
   const solUSD = parseFloat(el('solPrice').value) || 130;
-  const monUSD = parseFloat(el('monPrice').value) || 0.40;
+  const monUSD = parseFloat(el('monPrice').value) || 0.025;
   const targetPct = parseInt(el('targetPct').value);
   el('targetPctVal').textContent = targetPct + '%';
 
@@ -293,8 +296,8 @@ function update() {
     const pCostUSD = pCostSol * solUSD;
     const pPriceUSD = pumpPriceAt(pTokens) * solUSD;
 
-    // Ours
-    const oTokens = params.totalSupply * pct / 100;
+    // Ours (use realTokens for tradeable supply, same as pump)
+    const oTokens = params.realTokens * pct / 100;
     const oCostMon = ourCostToBuy(oTokens, params);
     const oCostUSD = oCostMon * monUSD;
     const oPriceUSD = ourPriceAt(oTokens, params) * monUSD;
@@ -332,9 +335,9 @@ function update() {
   el('dOurCost').textContent = fmt$(oCost);
   el('dOurCostMon').textContent = fmtN(oCost / monUSD) + ' MON';
   const pTk = PUMP.realTokens * targetPct / 100;
-  const oTk = params.totalSupply * targetPct / 100;
-  el('dTokens').textContent = targetPct + '% Supply';
-  el('dTokensSub').textContent = 'Pump: ' + fmtN(pTk) + ' | Ours: ' + fmtN(oTk);
+  const oTk = params.realTokens * targetPct / 100;
+  el('dTokens').textContent = targetPct + '% Tradeable';
+  el('dTokensSub').textContent = 'Pump: ' + fmtN(pTk) + ' (' + (pTk/PUMP.totalSupply*100).toFixed(1) + '% total) | Ours: ' + fmtN(oTk) + ' (' + (oTk/params.totalSupply*100).toFixed(1) + '% total)';
   const ratio = oCost / pCost;
   el('dRatio').textContent = ratio.toFixed(2) + 'x';
   el('dRatio').style.color = ratio > 1 ? 'var(--red)' : 'var(--green)';

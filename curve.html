@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bonding Curve Explorer</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+:root{--bg:#0c0c0c;--card:#141414;--card2:#1a1a1a;--border:#2a2a2a;--text:#d4d4d4;--text2:#666;--accent:#7c3aed;--cyan:#06b6d4;--green:#10b981;--red:#ef4444;--orange:#f59e0b;--pink:#ec4899;--mon:#a78bfa;--font:'JetBrains Mono',ui-monospace,'SF Mono','Cascadia Code',monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:12px}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+.header{padding:8px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--card)}
+.header h1{font-size:13px;font-weight:700;color:var(--green);letter-spacing:.02em}
+.header h1::before{content:'> ';color:var(--text2)}
+.tag{padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600;font-family:var(--font)}
+.tag-mon{background:var(--mon);color:#000}
+.tabs{display:flex;gap:0;padding:0 16px;background:var(--card);border-bottom:1px solid var(--border)}
+.tab{padding:8px 16px;font-size:11px;font-weight:600;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;font-family:var(--font);transition:all .15s;text-decoration:none}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--green);border-bottom-color:var(--green)}
+.container{max-width:1400px;margin:0 auto;padding:16px}
+.controls{display:flex;flex-wrap:wrap;gap:12px;padding:12px;background:var(--card);border:1px solid var(--border);border-radius:6px;margin-bottom:12px}
+.ctrl-group{display:flex;flex-direction:column;gap:3px}
+.ctrl-group label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.03em}
+.ctrl-group input,.ctrl-group select{background:var(--card2);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-family:var(--font);font-size:11px;width:120px}
+.slider-wrap{display:flex;align-items:center;gap:8px}
+.slider-wrap input[type=range]{flex:1;accent-color:var(--green);width:200px}
+.slider-val{font-size:13px;font-weight:700;color:var(--green);min-width:55px;text-align:right}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.chart-box{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:12px}
+.chart-box h3{font-size:11px;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.03em}
+.chart-wrap{height:280px;position:relative}
+.dash{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px}
+.dash-item{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center}
+.dash-item .label{font-size:9px;color:var(--text2);text-transform:uppercase;margin-bottom:2px}
+.dash-item .val{font-size:14px;font-weight:700}
+.dash-item .sub{font-size:9px;color:var(--text2);margin-top:1px}
+.col-price{color:var(--green)}.col-floor{color:var(--cyan)}.col-liq{color:var(--mon)}.col-mc{color:var(--orange)}
+table{width:100%;border-collapse:collapse;font-size:11px}
+thead th{text-align:right;padding:6px 8px;color:var(--text2);font-weight:500;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;position:sticky;top:0;background:var(--card)}
+thead th:first-child{text-align:left}
+td{padding:5px 8px;text-align:right;border-bottom:1px solid #1a1a1a}
+td:first-child{text-align:left;color:var(--text2)}
+tr:hover{background:var(--card2)}
+.table-box{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:12px;max-height:500px;overflow-y:auto}
+.table-box h3{font-size:11px;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.03em}
+.highlight{background:#10b98115}
+.marker{position:absolute;border-left:2px dashed var(--orange);height:100%;pointer-events:none;z-index:5}
+.formula{background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--text2);line-height:1.8}
+.formula code{color:var(--green);background:#10b98120;padding:1px 4px;border-radius:2px}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Bonding Curve Explorer</h1>
+  <span class="tag tag-mon">MON</span>
+</div>
+<div class="tabs">
+  <a class="tab" href="index.html">Simulator</a>
+  <a class="tab" href="chips.html">Chip Analysis</a>
+  <a class="tab active" href="curve.html">Curve Explorer</a>
+  <a class="tab" href="test.html">Tests</a>
+</div>
+
+<div class="container">
+
+<!-- Formula -->
+<div class="formula">
+  <strong>Price Function:</strong> <code>price(x) = fp + m × x<sup>n</sup></code> &nbsp;|&nbsp;
+  <strong>Buy Cost:</strong> <code>cost = fp × amt + m × [(s+amt)<sup>n+1</sup> - s<sup>n+1</sup>] / (n+1)</code> &nbsp;|&nbsp;
+  <strong>MC/TVL ≈ n+1</strong>
+</div>
+
+<!-- Controls -->
+<div class="controls">
+  <div class="ctrl-group">
+    <label>Curve Power (n)</label>
+    <select id="curveN">
+      <option value="1">n=1 Linear</option>
+      <option value="2" selected>n=2 Quadratic</option>
+      <option value="3">n=3 Cubic</option>
+      <option value="4">n=4 Quartic</option>
+    </select>
+  </div>
+  <div class="ctrl-group">
+    <label>Floor Price (MON)</label>
+    <input type="number" id="fp" value="0.00345" step="0.001">
+  </div>
+  <div class="ctrl-group">
+    <label>Slope (m)</label>
+    <input type="text" id="slopeM" value="3.36e-16">
+  </div>
+  <div class="ctrl-group">
+    <label>MON Price ($)</label>
+    <input type="number" id="monPrice" value="0.025" step="0.001">
+  </div>
+  <div class="ctrl-group">
+    <label>Buy Fee</label>
+    <input type="number" id="buyFee" value="0.01" step="0.005">
+  </div>
+  <div class="ctrl-group">
+    <label>Sell Fee</label>
+    <input type="number" id="sellFee" value="0.015" step="0.005">
+  </div>
+  <div class="ctrl-group" style="min-width:280px">
+    <label>Supply Cursor</label>
+    <div class="slider-wrap">
+      <input type="range" id="supplySlider" min="0" max="50000000" value="20000000" step="100000">
+      <span class="slider-val" id="supplyVal">20.0M</span>
+    </div>
+  </div>
+</div>
+
+<!-- Dashboard -->
+<div class="dash">
+  <div class="dash-item"><div class="label">Market Price</div><div class="val col-price" id="dPrice">—</div><div class="sub" id="dPriceUSD">—</div></div>
+  <div class="dash-item"><div class="label">Floor Price</div><div class="val col-floor" id="dFloor">—</div><div class="sub" id="dFloorUSD">—</div></div>
+  <div class="dash-item"><div class="label">FP / MP</div><div class="val col-floor" id="dFPMP">—</div><div class="sub">Floor ratio</div></div>
+  <div class="dash-item"><div class="label">Market Cap</div><div class="val col-mc" id="dMC">—</div><div class="sub" id="dMCSub">—</div></div>
+  <div class="dash-item"><div class="label">TVL</div><div class="val col-liq" id="dTVL">—</div><div class="sub" id="dTVLSub">—</div></div>
+  <div class="dash-item"><div class="label">MC / TVL</div><div class="val" id="dRatio">—</div><div class="sub">Capital efficiency</div></div>
+</div>
+
+<!-- Charts -->
+<div class="grid">
+  <div class="chart-box">
+    <h3>Price vs Supply</h3>
+    <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
+  </div>
+  <div class="chart-box">
+    <h3>Cumulative Cost (TVL) vs Supply</h3>
+    <div class="chart-wrap"><canvas id="costChart"></canvas></div>
+  </div>
+  <div class="chart-box">
+    <h3>Liquidity Breakdown vs Supply</h3>
+    <div class="chart-wrap"><canvas id="liqChart"></canvas></div>
+  </div>
+  <div class="chart-box">
+    <h3>MC / TVL Ratio vs Supply</h3>
+    <div class="chart-wrap"><canvas id="ratioChart"></canvas></div>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="table-box">
+  <h3>Supply Breakdown Table</h3>
+  <table>
+    <thead><tr>
+      <th>Supply</th>
+      <th>Price (MON)</th>
+      <th>Price ($)</th>
+      <th>Avg Price ($)</th>
+      <th>TVL (MON)</th>
+      <th>TVL ($)</th>
+      <th>Floor Sup ($)</th>
+      <th>Mkt Sup ($)</th>
+      <th>MC ($)</th>
+      <th>MC/TVL</th>
+      <th>FP/MP</th>
+      <th>Buy 100K Cost ($)</th>
+    </tr></thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+</div>
+
+<script>
+const el=id=>document.getElementById(id);
+function fmtN(v){if(v>=1e9)return(v/1e9).toFixed(2)+'B';if(v>=1e6)return(v/1e6).toFixed(2)+'M';if(v>=1e3)return(v/1e3).toFixed(1)+'K';return v.toFixed(1)}
+function fmt$(v){if(Math.abs(v)>=1e6)return'$'+(v/1e6).toFixed(2)+'M';if(Math.abs(v)>=1e3)return'$'+(v/1e3).toFixed(1)+'K';if(Math.abs(v)>=1)return'$'+v.toFixed(2);if(Math.abs(v)>=0.001)return'$'+v.toFixed(4);return'$'+v.toExponential(2)}
+function fmtP(v){if(v>=0.01)return v.toFixed(4);if(v>=0.0001)return v.toFixed(6);return v.toExponential(3)}
+
+function getParams(){
+  const n=parseInt(el('curveN').value);
+  const fp=parseFloat(el('fp').value)||0.00345;
+  const m=parseFloat(el('slopeM').value)||3.36e-16;
+  const monUSD=parseFloat(el('monPrice').value)||0.025;
+  const buyFee=parseFloat(el('buyFee').value)||0.01;
+  const sellFee=parseFloat(el('sellFee').value)||0.015;
+  return{n,fp,m,monUSD,buyFee,sellFee};
+}
+
+function price(x,P){return P.fp+P.m*Math.pow(x,P.n)}
+function tvl(x,P){const n1=P.n+1;return P.fp*x+P.m*Math.pow(x,n1)/n1}
+function buyCostAt(sx,amt,P){const n1=P.n+1;return P.fp*amt+P.m*(Math.pow(sx+amt,n1)-Math.pow(sx,n1))/n1}
+
+// Charts
+const chartOpts=(ylabel)=>({
+  responsive:true,maintainAspectRatio:false,
+  interaction:{mode:'index',intersect:false},
+  plugins:{legend:{labels:{color:'#666',font:{family:"'JetBrains Mono'",size:10},boxWidth:12,padding:8}}},
+  scales:{
+    x:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9},callback:v=>fmtN(v)},title:{display:true,text:'Supply',color:'#555',font:{family:"'JetBrains Mono'",size:9}}},
+    y:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9}},title:{display:true,text:ylabel,color:'#555',font:{family:"'JetBrains Mono'",size:9}}}
+  }
+});
+
+const priceChart=new Chart(el('priceChart'),{type:'line',data:{labels:[],datasets:[
+  {label:'Market Price',data:[],borderColor:'#10b981',backgroundColor:'#10b98130',fill:true,pointRadius:0,borderWidth:1.5},
+  {label:'Floor Price',data:[],borderColor:'#06b6d4',borderDash:[5,3],pointRadius:0,borderWidth:1.5,fill:false}
+]},options:chartOpts('Price (MON)')});
+
+const costChart=new Chart(el('costChart'),{type:'line',data:{labels:[],datasets:[
+  {label:'TVL (MON)',data:[],borderColor:'#a78bfa',backgroundColor:'#a78bfa20',fill:true,pointRadius:0,borderWidth:1.5}
+]},options:chartOpts('MON')});
+
+const liqChart=new Chart(el('liqChart'),{type:'line',data:{labels:[],datasets:[
+  {label:'Floor Support',data:[],borderColor:'#06b6d4',backgroundColor:'#06b6d420',fill:true,pointRadius:0,borderWidth:1.5},
+  {label:'Market Support',data:[],borderColor:'#10b981',backgroundColor:'#10b98120',fill:true,pointRadius:0,borderWidth:1.5}
+]},options:chartOpts('MON')});
+
+const ratioChart=new Chart(el('ratioChart'),{type:'line',data:{labels:[],datasets:[
+  {label:'MC/TVL',data:[],borderColor:'#f59e0b',pointRadius:0,borderWidth:1.5,fill:false},
+  {label:'FP/MP %',data:[],borderColor:'#06b6d4',borderDash:[5,3],pointRadius:0,borderWidth:1.5,fill:false,yAxisID:'y1'}
+]},options:{
+  responsive:true,maintainAspectRatio:false,
+  interaction:{mode:'index',intersect:false},
+  plugins:{legend:{labels:{color:'#666',font:{family:"'JetBrains Mono'",size:10},boxWidth:12,padding:8}}},
+  scales:{
+    x:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9},callback:v=>fmtN(v)}},
+    y:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9}},title:{display:true,text:'MC/TVL',color:'#f59e0b',font:{family:"'JetBrains Mono'",size:9}},position:'left'},
+    y1:{grid:{drawOnChartArea:false},ticks:{color:'#06b6d4',font:{family:"'JetBrains Mono'",size:9},callback:v=>v.toFixed(0)+'%'},title:{display:true,text:'FP/MP %',color:'#06b6d4',font:{family:"'JetBrains Mono'",size:9}},position:'right'}
+  }
+}});
+
+function update(){
+  const P=getParams();
+  const cursor=parseInt(el('supplySlider').value);
+  const maxS=parseInt(el('supplySlider').max);
+  el('supplyVal').textContent=fmtN(cursor);
+
+  // Generate data points
+  const steps=200;
+  const labels=[],prices=[],floors=[],tvls=[],floorSups=[],mktSups=[],mcTvls=[],fpMps=[];
+
+  for(let i=0;i<=steps;i++){
+    const x=maxS*i/steps;
+    labels.push(x);
+    const p=price(x,P);
+    const t=tvl(x,P);
+    const fs=P.fp*x;
+    const ms=Math.max(0,t-fs);
+    const mc=p*x;
+    prices.push(p);
+    floors.push(P.fp);
+    tvls.push(t);
+    floorSups.push(fs);
+    mktSups.push(ms);
+    mcTvls.push(t>0?mc/t:0);
+    fpMps.push(p>0?P.fp/p*100:0);
+  }
+
+  // Update charts
+  priceChart.data.labels=labels;
+  priceChart.data.datasets[0].data=prices;
+  priceChart.data.datasets[1].data=floors;
+  priceChart.update();
+
+  costChart.data.labels=labels;
+  costChart.data.datasets[0].data=tvls;
+  costChart.update();
+
+  liqChart.data.labels=labels;
+  liqChart.data.datasets[0].data=floorSups;
+  liqChart.data.datasets[1].data=mktSups;
+  liqChart.update();
+
+  ratioChart.data.labels=labels;
+  ratioChart.data.datasets[0].data=mcTvls;
+  ratioChart.data.datasets[1].data=fpMps;
+  ratioChart.update();
+
+  // Dashboard at cursor
+  const cp=price(cursor,P);
+  const ct=tvl(cursor,P);
+  const cfs=P.fp*cursor;
+  const cms=Math.max(0,ct-cfs);
+  const cmc=cp*cursor;
+  const cRatio=ct>0?cmc/ct:0;
+
+  el('dPrice').textContent=fmtP(cp)+' MON';
+  el('dPriceUSD').textContent=fmt$(cp*P.monUSD);
+  el('dFloor').textContent=fmtP(P.fp)+' MON';
+  el('dFloorUSD').textContent=fmt$(P.fp*P.monUSD);
+  el('dFPMP').textContent=(cp>0?(P.fp/cp*100).toFixed(1):0)+'%';
+  el('dMC').textContent=fmt$(cmc*P.monUSD);
+  el('dMCSub').textContent=fmtN(cmc)+' MON';
+  el('dTVL').textContent=fmt$(ct*P.monUSD);
+  el('dTVLSub').textContent=fmtN(ct)+' MON';
+  el('dRatio').textContent=cRatio.toFixed(2)+'x';
+
+  // Table
+  const rows=[0.5,1,2,3,5,8,10,12,15,18,20,25,30,35,40,50];
+  const tableSupplies=rows.map(v=>v*1e6).filter(v=>v<=maxS);
+  let html='';
+  for(const s of tableSupplies){
+    const p=price(s,P);
+    const t=tvl(s,P);
+    const fs=P.fp*s;
+    const ms=Math.max(0,t-fs);
+    const mc=p*s;
+    const ratio=t>0?mc/t:0;
+    const avg=s>0?t/s:0;
+    const buy100k=buyCostAt(s,100000,P);
+    const isHighlight=Math.abs(s-cursor)<500000;
+    html+=`<tr${isHighlight?' class="highlight"':''}>
+      <td>${fmtN(s)}</td>
+      <td class="col-price">${fmtP(p)}</td>
+      <td class="col-price">${fmt$(p*P.monUSD)}</td>
+      <td>${fmt$(avg*P.monUSD)}</td>
+      <td class="col-liq">${fmtN(t)}</td>
+      <td class="col-liq">${fmt$(t*P.monUSD)}</td>
+      <td class="col-floor">${fmt$(fs*P.monUSD)}</td>
+      <td>${fmt$(ms*P.monUSD)}</td>
+      <td class="col-mc">${fmt$(mc*P.monUSD)}</td>
+      <td>${ratio.toFixed(2)}x</td>
+      <td class="col-floor">${(p>0?(P.fp/p*100).toFixed(1):0)}%</td>
+      <td>${fmt$(buy100k*(1+P.buyFee)*P.monUSD)}</td>
+    </tr>`;
+  }
+  el('tableBody').innerHTML=html;
+}
+
+// Auto-update slope when n changes
+el('curveN').addEventListener('change',()=>{
+  const n=parseInt(el('curveN').value);
+  const defaultM=33.6*Math.pow(10,-(7*n+3));
+  el('slopeM').value=defaultM.toExponential(2);
+  update();
+});
+
+// Bind all inputs
+['curveN','fp','slopeM','monPrice','buyFee','sellFee','supplySlider'].forEach(id=>{
+  el(id).addEventListener('input',update);
+});
+
+update();
+</script>
+</body>
+</html>

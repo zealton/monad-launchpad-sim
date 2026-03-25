@@ -23,6 +23,12 @@ h1::before{content:'> '}
 </style>
 </head>
 <body>
+<div style="display:flex;gap:0;margin-bottom:12px;border-bottom:1px solid #2a2a2a">
+<a href="index.html" style="padding:8px 16px;font-size:11px;font-weight:600;color:#666;text-decoration:none;font-family:'JetBrains Mono',monospace;border-bottom:2px solid transparent">Simulator</a>
+<a href="curve.html" style="padding:8px 16px;font-size:11px;font-weight:600;color:#666;text-decoration:none;font-family:'JetBrains Mono',monospace;border-bottom:2px solid transparent">Curve Explorer</a>
+<a href="chips.html" style="padding:8px 16px;font-size:11px;font-weight:600;color:#666;text-decoration:none;font-family:'JetBrains Mono',monospace;border-bottom:2px solid transparent">Chip Analysis</a>
+<a href="test.html" style="padding:8px 16px;font-size:11px;font-weight:600;color:#10b981;text-decoration:none;font-family:'JetBrains Mono',monospace;border-bottom:2px solid #10b981">Tests</a>
+</div>
 <h1>Bonding Curve + Loop Lending — Test Suite</h1>
 <div id="summary" class="summary">Running...</div>
 <div id="results"></div>
@@ -30,21 +36,30 @@ h1::before{content:'> '}
 <script>
 // ================================================================
 //  REPLICATE CORE LOGIC (must match index.html exactly)
+//  Uses power curve: price = fp + m * x^n
 // ================================================================
-function price(x, fp, m) {
+let _n = 2; // default curve exponent, can be overridden per-state
+
+function price(x, fp, m, n) {
+  n = n || _n;
   if (x <= 0) return fp;
-  return fp + m * x;
+  return fp + m * Math.pow(x, n);
 }
 
-function integrate(sx, amt, fp, m) {
-  return fp * amt + m * amt * (sx + amt / 2);
+function integrate(sx, amt, fp, m, n) {
+  n = n || _n;
+  const n1 = n + 1;
+  return fp * amt + m * (Math.pow(sx + amt, n1) - Math.pow(sx, n1)) / n1;
 }
 
 function createState(overrides = {}) {
+  const n = overrides.n || 2;
+  // Default params calibrated for n=2, graduation MC=$69K at 20M supply
+  const defaultM = 33.6 * Math.pow(10, -(7 * n + 3));
   return {
-    m: 80e-10, fp: 0.001, supply: 0, liq: 0,
-    tMFR: 0.30, xMFR: 0.05, cMFR: 0.02,
-    maxT: 0.50, minT: 0.20,
+    n, m: defaultM, fp: 0.00345, supply: 0, liq: 0,
+    tMFR: 0.20, xMFR: 0.08, cMFR: 0.02,
+    maxT: 0.50, minT: 0.15,
     buyFee: 0.01, sellFee: 0.015,
     ltv: 1.0, apr: 0.10,
     collateral: 0, sysCollateral: 0, debt: 0, userDebt: 0,
@@ -81,7 +96,7 @@ function autoUpFP(S) {
 }
 
 function buy(S, amt) {
-  const c = integrate(S.supply, amt, S.fp, S.m);
+  const c = integrate(S.supply, amt, S.fp, S.m, S.n);
   const f = c * S.buyFee, total = c + f;
   if (S.userMON < total) return { ok: false, reason: 'insufficient MON' };
   S.supply += amt; S.liq += c; S.totalFees += f; S.totalVol += c;
@@ -93,7 +108,7 @@ function buy(S, amt) {
 function sell(S, amt) {
   const sa = Math.min(amt, S.userTokens, S.supply);
   if (sa <= 0) return { ok: false, reason: 'no tokens' };
-  let p = integrate(S.supply - sa, sa, S.fp, S.m);
+  let p = integrate(S.supply - sa, sa, S.fp, S.m, S.n);
   let f = p * S.sellFee, net = p - f;
   // Cap at pool liquidity — MFR may have raised FP above what pool can pay
   if (net > S.liq) { net = S.liq; f = net * S.sellFee / (1 - S.sellFee); p = net + f; }
@@ -174,89 +189,120 @@ function assertGte(a, b, msg) {
 // ================================================================
 
 describe('Price Function — Basics', () => {
-  it('price at supply=0 equals floor price', () => {
-    assert(price(0, 0.001, 8e-9) === 0.001);
-    assert(price(0, 0.5, 1e-8) === 0.5);
-    assert(price(0, 100, 1e-6) === 100);
+  it('price at supply=0 equals floor price (all n)', () => {
+    for (const n of [1, 2, 3, 4]) {
+      assert(price(0, 0.001, 8e-9, n) === 0.001, `n=${n}`);
+      assert(price(0, 0.5, 1e-8, n) === 0.5, `n=${n}`);
+    }
   });
 
-  it('price is always >= floor price', () => {
-    for (const fp of [0.0001, 0.001, 0.01, 0.1, 1, 10]) {
-      for (const x of [0, 1, 1000, 1e6, 1e8]) {
-        assertGte(price(x, fp, 8e-9), fp, `fp=${fp} x=${x}`);
+  it('price is always >= floor price (all n)', () => {
+    for (const n of [1, 2, 3]) {
+      for (const fp of [0.0001, 0.001, 0.01, 0.1, 1]) {
+        for (const x of [0, 1, 1000, 1e6, 1e8]) {
+          assertGte(price(x, fp, 8e-9, n), fp, `n=${n} fp=${fp} x=${x}`);
+        }
       }
     }
   });
 
-  it('price is strictly increasing with supply', () => {
-    const fp = 0.001, m = 8e-9;
-    let prev = price(0, fp, m);
-    for (let x = 1000; x <= 1e8; x += 1000) {
-      const p = price(x, fp, m);
-      assertGt(p, prev, `supply=${x}`);
-      prev = p;
+  it('price is strictly increasing with supply (all n)', () => {
+    for (const n of [1, 2, 3]) {
+      const fp = 0.001, m = 8e-9;
+      let prev = price(0, fp, m, n);
+      for (let x = 1000; x <= 1e7; x += 10000) {
+        const p = price(x, fp, m, n);
+        assertGt(p, prev, `n=${n} supply=${x}`);
+        prev = p;
+      }
     }
   });
 
   it('price increases when floor price increases (at any supply)', () => {
-    const m = 8e-9;
+    const m = 8e-9, n = 2;
     for (const x of [0, 1e5, 1e6, 1e7]) {
-      const p1 = price(x, 0.001, m);
-      const p2 = price(x, 0.01, m);
-      const p3 = price(x, 0.1, m);
+      const p1 = price(x, 0.001, m, n);
+      const p2 = price(x, 0.01, m, n);
+      const p3 = price(x, 0.1, m, n);
       assertGt(p2, p1, `x=${x} fp 0.01 vs 0.001`);
       assertGt(p3, p2, `x=${x} fp 0.1 vs 0.01`);
     }
   });
 
-  it('price scales linearly with slope', () => {
-    const fp = 0.001, x = 1e6;
-    const p1 = price(x, fp, 4e-9);
-    const p2 = price(x, fp, 8e-9);
-    assertClose(p2 - fp, 2 * (p1 - fp), 1e-12, 'double slope doubles premium');
+  it('higher n gives steeper curve (same m)', () => {
+    const fp = 0.001, m = 1e-15, x = 1e7;
+    const p1 = price(x, fp, m, 1);
+    const p2 = price(x, fp, m, 2);
+    const p3 = price(x, fp, m, 3);
+    // At large x with same m, higher n → higher price
+    // (depends on m scale, but for 1e-15 at 1e7: n=1→0.01, n=2→100, n=3→1e6)
+    assertGt(p3, p2, 'n=3 > n=2');
+    assertGt(p2, p1, 'n=2 > n=1');
+  });
+
+  it('MC/TVL ratio approximates n+1', () => {
+    for (const n of [1, 2, 3, 4]) {
+      const fp = 0.001, S = 1e7;
+      const m = 1 / Math.pow(S, n); // normalize so m*S^n = 1
+      const mc = price(S, fp, m, n) * S;
+      const n1 = n + 1;
+      const tvl = fp * S + m * Math.pow(S, n1) / n1;
+      const ratio = mc / tvl;
+      // Should be close to n+1 when m*S^n >> fp
+      assertClose(ratio, n + 1, 1.0, `n=${n}: MC/TVL should be ~${n+1}, got ${ratio.toFixed(2)}`);
+    }
   });
 });
 
 describe('Integration — Buy Cost', () => {
-  it('cost is always positive for positive amount', () => {
-    for (const amt of [1, 100, 1e6]) {
-      assertGt(integrate(0, amt, 0.001, 8e-9), 0, `amt=${amt}`);
+  it('cost is always positive for positive amount (all n)', () => {
+    for (const n of [1, 2, 3]) {
+      for (const amt of [1, 100, 1e6]) {
+        assertGt(integrate(0, amt, 0.001, 8e-9, n), 0, `n=${n} amt=${amt}`);
+      }
     }
   });
 
-  it('cost equals fp*amount when slope=0', () => {
-    const cost = integrate(1e6, 5e5, 0.01, 0);
-    assertClose(cost, 0.01 * 5e5, 1e-6);
-  });
-
-  it('cost increases with higher starting supply (same amount)', () => {
-    const amt = 1e5, fp = 0.001, m = 8e-9;
-    const c1 = integrate(0, amt, fp, m);
-    const c2 = integrate(1e6, amt, fp, m);
-    const c3 = integrate(1e7, amt, fp, m);
-    assertGt(c2, c1); assertGt(c3, c2);
-  });
-
-  it('cost of A+B equals cost of A then B', () => {
-    const fp = 0.001, m = 8e-9, s = 1e6;
-    const a = 3e5, b = 5e5;
-    const costAB = integrate(s, a + b, fp, m);
-    const costA = integrate(s, a, fp, m);
-    const costB = integrate(s + a, b, fp, m);
-    assertClose(costAB, costA + costB, 1e-6, 'additivity');
-  });
-
-  it('closed-form matches numerical integration', () => {
-    const fp = 0.01, m = 5e-9, sx = 2e6, amt = 1e6;
-    const exact = integrate(sx, amt, fp, m);
-    // numerical check
-    const n = 10000, dx = amt / n;
-    let num = 0;
-    for (let i = 0; i < n; i++) {
-      const a = sx + i * dx, b = sx + (i + 1) * dx;
-      num += (price(a, fp, m) + price(b, fp, m)) / 2 * dx;
+  it('cost equals fp*amount when slope=0 (all n)', () => {
+    for (const n of [1, 2, 3]) {
+      const cost = integrate(1e6, 5e5, 0.01, 0, n);
+      assertClose(cost, 0.01 * 5e5, 1e-6, `n=${n}`);
     }
-    assertClose(exact, num, exact * 1e-8, 'exact vs numerical');
+  });
+
+  it('cost increases with higher starting supply (all n)', () => {
+    for (const n of [1, 2, 3]) {
+      const amt = 1e5, fp = 0.001, m = 1e-15;
+      const c1 = integrate(0, amt, fp, m, n);
+      const c2 = integrate(1e6, amt, fp, m, n);
+      const c3 = integrate(1e7, amt, fp, m, n);
+      assertGt(c2, c1, `n=${n} 1M>0`); assertGt(c3, c2, `n=${n} 10M>1M`);
+    }
+  });
+
+  it('cost of A+B equals cost of A then B (additivity, all n)', () => {
+    for (const n of [1, 2, 3]) {
+      const fp = 0.001, m = 1e-15, s = 1e6;
+      const a = 3e5, b = 5e5;
+      const costAB = integrate(s, a + b, fp, m, n);
+      const costA = integrate(s, a, fp, m, n);
+      const costB = integrate(s + a, b, fp, m, n);
+      assertClose(costAB, costA + costB, costAB * 1e-10, `n=${n} additivity`);
+    }
+  });
+
+  it('closed-form matches numerical integration (all n)', () => {
+    for (const cn of [1, 2, 3]) {
+      const fp = 0.01, m = 1e-15, sx = 2e6, amt = 1e6;
+      const exact = integrate(sx, amt, fp, m, cn);
+      const steps = 10000, dx = amt / steps;
+      let num = 0;
+      for (let i = 0; i < steps; i++) {
+        const a = sx + i * dx, b = sx + (i + 1) * dx;
+        num += (price(a, fp, m, cn) + price(b, fp, m, cn)) / 2 * dx;
+      }
+      assertClose(exact, num, exact * 1e-4, `n=${cn} exact vs numerical`);
+    }
   });
 });
 
@@ -315,19 +361,19 @@ describe('Sell — Supply Decreases, FP Holds', () => {
     // Use high threshold so MFR won't trigger during sells
     const S = createState({ tMFR: 0.99, maxT: 0.99 });
     for (let i = 0; i < 30; i++) {
-      const c = integrate(S.supply, 500000, S.fp, S.m), f = c * S.buyFee;
+      const c = integrate(S.supply, 500000, S.fp, S.m, S.n), f = c * S.buyFee;
       S.supply += 500000; S.liq += c; S.totalFees += f;
       S.userTokens += 500000; S.userMON -= (c + f);
       // no autoUpFP — avoid MFR
     }
-    let prevPrice = price(S.supply, S.fp, S.m);
+    let prevPrice = price(S.supply, S.fp, S.m, S.n);
     for (let i = 0; i < 15; i++) {
       const sa = Math.min(100000, S.userTokens);
-      const p = integrate(S.supply - sa, sa, S.fp, S.m);
-      const f = p * S.sellFee, n = p - f;
-      S.supply -= sa; S.liq -= n; S.totalFees += f;
-      S.userTokens -= sa; S.userMON += n;
-      const newP = price(S.supply, S.fp, S.m);
+      const p = integrate(S.supply - sa, sa, S.fp, S.m, S.n);
+      const f = p * S.sellFee, net = p - f;
+      S.supply -= sa; S.liq -= net; S.totalFees += f;
+      S.userTokens -= sa; S.userMON += net;
+      const newP = price(S.supply, S.fp, S.m, S.n);
       assert(newP < prevPrice, `sell #${i}: price should drop without MFR`);
       prevPrice = newP;
     }
@@ -600,22 +646,20 @@ describe('MFR Mechanism', () => {
 describe('Edge Cases', () => {
   it('buy 0 tokens does nothing', () => {
     const S = createState();
-    const snap = JSON.stringify(S);
     buy(S, 0);
-    // buy with 0 returns early since amt <= 0 check is in doTrade, not buy
-    // but integrate(s, 0, fp, m) = 0, so cost=0, fee=0 — no state change effectively
+    // integrate(s, 0, fp, m, n) = 0, so cost=0, fee=0 — no state change
   });
 
   it('works with very large slope', () => {
-    const S = createState({ m: 1e-6 }); // very steep
+    const S = createState({ m: 1e-12 }); // steep for n=2
     buy(S, 1000);
-    assertGt(price(S.supply, S.fp, S.m), S.fp);
+    assertGt(price(S.supply, S.fp, S.m, S.n), S.fp);
   });
 
   it('works with very small slope', () => {
-    const S = createState({ m: 1e-12 }); // very flat
+    const S = createState({ m: 1e-25 }); // very flat for n=2
     buy(S, 1e6);
-    const p = price(S.supply, S.fp, S.m);
+    const p = price(S.supply, S.fp, S.m, S.n);
     assertGt(p, S.fp);
     assertClose(p, S.fp, 0.01, 'price should be close to fp with tiny slope');
   });
@@ -623,22 +667,16 @@ describe('Edge Cases', () => {
   it('works with fp=0 (no floor)', () => {
     const S = createState({ fp: 0 });
     buy(S, 1e6);
-    assertGt(price(S.supply, S.fp, S.m), 0);
+    assertGt(price(S.supply, S.fp, S.m, S.n), 0);
   });
 
-  it('multiple presets produce valid states', () => {
-    const presets = [
-      { m: 80e-10, fp: 0.001 },  // meme
-      { m: 30e-10, fp: 0.01 },   // defi
-      { m: 150e-10, fp: 0.1 },   // nft
-      { m: 15e-10, fp: 0.005 },  // infra
-    ];
-    for (const p of presets) {
-      const S = createState(p);
+  it('all n values produce valid states', () => {
+    for (const n of [1, 2, 3, 4]) {
+      const S = createState({ n });
       for (let i = 0; i < 20; i++) buy(S, 1e6);
-      assertGt(price(S.supply, S.fp, S.m), S.fp, `preset m=${p.m}`);
-      assertGte(S.liq, 0);
-      assertGte(S.fp, p.fp);
+      assertGt(price(S.supply, S.fp, S.m, S.n), S.fp, `n=${n}`);
+      assertGte(S.liq, 0, `n=${n} liq`);
+      assertGte(S.fp, 0.00345, `n=${n} fp`);
     }
   });
 });
@@ -676,15 +714,15 @@ describe('Stress — 500 Random Operations', () => {
 
 // Helper: simulate external market buys (like Auto Sim does)
 function extBuy(S, amt) {
-  const c = integrate(S.supply, amt, S.fp, S.m), f = c * S.buyFee;
+  const c = integrate(S.supply, amt, S.fp, S.m, S.n), f = c * S.buyFee;
   S.supply += amt; S.liq += c; S.totalFees += f; S.totalVol += c;
   autoUpFP(S);
 }
 function extSell(S, amt) {
   const sa = Math.min(amt, S.supply); if (sa <= 0) return;
-  let p = integrate(S.supply - sa, sa, S.fp, S.m), f = p * S.sellFee, n = p - f;
-  if (n > S.liq) { n = S.liq; f = n * S.sellFee / (1 - S.sellFee); p = n + f; }
-  S.supply -= sa; S.liq -= n; S.totalFees += f; S.totalVol += p;
+  let p = integrate(S.supply - sa, sa, S.fp, S.m, S.n), f = p * S.sellFee, net = p - f;
+  if (net > S.liq) { net = S.liq; f = net * S.sellFee / (1 - S.sellFee); p = net + f; }
+  S.supply -= sa; S.liq -= net; S.totalFees += f; S.totalVol += p;
   autoUpFP(S);
 }
 
@@ -786,6 +824,192 @@ describe('Integration — Auto Sim + Manual Ops', () => {
       if (S.supply > 0) assertGte(price(S.supply, S.fp, S.m), S.fp, `step ${i}: price >= fp`);
       assertGte(S.supply, 0, `step ${i}: supply >= 0`);
       assertGte(S.liq, -1e-6, `step ${i}: liq >= 0`);
+    }
+  });
+});
+
+// ================================================================
+//  CROSS-PAGE CONSISTENCY (chips.html vs index.html)
+//  Replicate chips.html functions and verify they match
+// ================================================================
+
+// Replicate chips.html's pump.fun model
+const PUMP = {
+  totalSupply: 1_000_000_000,
+  realTokens: 793_100_000,
+  virtualSol: 30,
+  virtualToken: 1_073_000_191,
+  get k() { return this.virtualSol * this.virtualToken; }
+};
+
+function pumpCostToBuy(tokens) {
+  const newVT = PUMP.virtualToken - tokens;
+  if (newVT <= 0) return Infinity;
+  return PUMP.k / newVT - PUMP.virtualSol;
+}
+
+function pumpPriceAt(tokensBought) {
+  const vs = PUMP.virtualSol + pumpCostToBuy(tokensBought);
+  const vt = PUMP.virtualToken - tokensBought;
+  return vs / vt;
+}
+
+// Replicate chips.html's "Ours" model
+function chipsGetParams(n, fpRatio, gradMC_USD, monUSD) {
+  const gradMC = gradMC_USD / monUSD;
+  const totalSupply = 1_000_000_000;
+  const realTokens = 793_100_000;
+  const gradPrice = gradMC / totalSupply;
+  const fp = gradPrice * fpRatio;
+  const m = (gradPrice - fp) / Math.pow(realTokens, n);
+  return { n, fp, m, totalSupply, realTokens, gradPrice };
+}
+
+function chipsCostToBuy(tokens, params) {
+  const n1 = params.n + 1;
+  return params.fp * tokens + params.m * Math.pow(tokens, n1) / n1;
+}
+
+function chipsPriceAt(supply, params) {
+  return params.fp + params.m * Math.pow(supply, params.n);
+}
+
+describe('Cross-Page — chips.html price matches index.html price', () => {
+  it('same formula: price = fp + m * supply^n', () => {
+    const params = chipsGetParams(2, 0.025, 69000, 0.025);
+    for (const supply of [0, 1e6, 1e7, 5e8, 793100000]) {
+      const chipsP = chipsPriceAt(supply, params);
+      const indexP = price(supply, params.fp, params.m, params.n);
+      assertClose(chipsP, indexP, 1e-18, `supply=${supply}`);
+    }
+  });
+
+  it('same formula: integrate matches for all n', () => {
+    for (const n of [1, 2, 3, 4]) {
+      const params = chipsGetParams(n, 0.025, 69000, 0.025);
+      for (const tokens of [1e6, 1e7, 1e8, 5e8]) {
+        const chipsCost = chipsCostToBuy(tokens, params);
+        const indexCost = integrate(0, tokens, params.fp, params.m, n);
+        assertClose(chipsCost, indexCost, Math.abs(chipsCost) * 1e-10, `n=${n} tokens=${tokens}`);
+      }
+    }
+  });
+
+  it('chips graduation MC matches target $69K', () => {
+    const monUSD = 0.025;
+    const params = chipsGetParams(2, 0.025, 69000, monUSD);
+    const gradPrice = chipsPriceAt(params.realTokens, params);
+    const mc = gradPrice * params.totalSupply * monUSD;
+    assertClose(mc, 69000, 1, 'graduation MC should be ~$69K');
+  });
+
+  it('chips fp ratio is correctly applied', () => {
+    const params = chipsGetParams(2, 0.025, 69000, 0.025);
+    const ratio = params.fp / params.gradPrice;
+    assertClose(ratio, 0.025, 1e-10, 'fp should be 2.5% of grad price');
+  });
+});
+
+describe('Cross-Page — pump.fun constants', () => {
+  it('pump.fun virtual reserves: k = virtualSol * virtualToken', () => {
+    assert(PUMP.k === 30 * 1_073_000_191, 'k should be 30 * 1.073B');
+  });
+
+  it('pump.fun graduation cost ≈ 85 SOL (~$11.9K at $140/SOL)', () => {
+    const cost = pumpCostToBuy(PUMP.realTokens);
+    // pump.fun graduation is roughly 85 SOL
+    assertClose(cost, 85, 5, `graduation cost = ${cost.toFixed(1)} SOL`);
+  });
+
+  it('pump.fun graduation MC ≈ $57K at $140/SOL', () => {
+    const gradPrice = pumpPriceAt(PUMP.realTokens);
+    const mc = gradPrice * PUMP.totalSupply * 140;
+    assertClose(mc, 57000, 5000, `graduation MC = $${Math.round(mc)}`);
+  });
+
+  it('pump.fun price is monotonically increasing', () => {
+    let prev = pumpPriceAt(0);
+    for (let t = 1e7; t <= PUMP.realTokens; t += 1e7) {
+      const p = pumpPriceAt(t);
+      assertGt(p, prev, `tokens=${t}`);
+      prev = p;
+    }
+  });
+
+  it('pump.fun cost is monotonically increasing', () => {
+    let prev = 0;
+    for (let t = 1e7; t <= PUMP.realTokens; t += 1e7) {
+      const c = pumpCostToBuy(t);
+      assertGt(c, prev, `tokens=${t}`);
+      prev = c;
+    }
+  });
+});
+
+describe('Cross-Page — Both models at same % produce comparable results', () => {
+  it('at 100% supply, both reach their target graduation MC', () => {
+    const solUSD = 140, monUSD = 0.025;
+    // Pump.fun
+    const pGradPrice = pumpPriceAt(PUMP.realTokens);
+    const pMC = pGradPrice * PUMP.totalSupply * solUSD;
+    assertClose(pMC, 57000, 8000, 'pump MC at graduation');
+
+    // Ours
+    const params = chipsGetParams(2, 0.025, 69000, monUSD);
+    const oGradPrice = chipsPriceAt(params.realTokens, params);
+    const oMC = oGradPrice * params.totalSupply * monUSD;
+    assertClose(oMC, 69000, 1, 'our MC at graduation');
+  });
+
+  it('cost ordering: ours cheaper at small %, pump cheaper at large %', () => {
+    const solUSD = 140, monUSD = 0.025;
+    const params = chipsGetParams(2, 0.025, 69000, monUSD);
+
+    // At 5% supply, ours should be cheaper (n=2 curve is flat early)
+    const p5 = pumpCostToBuy(PUMP.realTokens * 0.05) * solUSD;
+    const o5 = chipsCostToBuy(params.realTokens * 0.05, params) * monUSD;
+    assert(o5 < p5, `at 5%: ours($${Math.round(o5)}) should be < pump($${Math.round(p5)})`);
+
+    // At 100% supply, pump should be cheaper (their curve is less steep overall)
+    const p100 = pumpCostToBuy(PUMP.realTokens) * solUSD;
+    const o100 = chipsCostToBuy(params.realTokens, params) * monUSD;
+    assert(o100 > p100, `at 100%: ours($${Math.round(o100)}) should be > pump($${Math.round(p100)})`);
+  });
+});
+
+describe('Power Curve — n variation tests', () => {
+  it('higher n produces higher MC/TVL ratio', () => {
+    const monUSD = 0.025;
+    let prevRatio = 0;
+    for (const n of [1, 2, 3, 4]) {
+      const params = chipsGetParams(n, 0.025, 69000, monUSD);
+      const supply = params.realTokens;
+      const mc = chipsPriceAt(supply, params) * params.totalSupply;
+      const tvl = chipsCostToBuy(supply, params);
+      const ratio = mc / tvl;
+      assertGt(ratio, prevRatio, `n=${n}: MC/TVL=${ratio.toFixed(2)} should > previous`);
+      prevRatio = ratio;
+    }
+  });
+
+  it('all n values have same graduation MC', () => {
+    const monUSD = 0.025;
+    for (const n of [1, 2, 3, 4]) {
+      const params = chipsGetParams(n, 0.025, 69000, monUSD);
+      const mc = chipsPriceAt(params.realTokens, params) * params.totalSupply * monUSD;
+      assertClose(mc, 69000, 1, `n=${n}: MC should be $69K`);
+    }
+  });
+
+  it('higher n = flatter early curve', () => {
+    const monUSD = 0.025, supply = 1e7; // 1% of 1B
+    let prevPrice = Infinity;
+    for (const n of [1, 2, 3, 4]) {
+      const params = chipsGetParams(n, 0.025, 69000, monUSD);
+      const p = chipsPriceAt(supply, params);
+      // Higher n → lower early price (flatter early)
+      assert(p < prevPrice || prevPrice === Infinity, `n=${n}: early price should be lower than n=${n-1}`);
+      prevPrice = p;
     }
   });
 });
