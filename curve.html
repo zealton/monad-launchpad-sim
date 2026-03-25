@@ -210,7 +210,7 @@ const chartOpts=(ylabel)=>({
   interaction:{mode:'index',intersect:false},
   plugins:{legend:{labels:{color:'#666',font:{family:"'JetBrains Mono'",size:10},boxWidth:12,padding:8}},tooltip:{callbacks:{title:items=>{const pct=items[0].label;const maxS=parseFloat(document.getElementById('maxSupply').value)||1e9;return pct+'% = '+fmtN(maxS*parseFloat(pct)/100)+' tokens'}}}},
   scales:{
-    x:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9},callback:v=>v+'%'},title:{display:true,text:'% of Max Supply',color:'#555',font:{family:"'JetBrains Mono'",size:9}}},
+    x:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9},maxTicksLimit:15,callback:function(val,idx){const l=this.getLabelForValue(val);return l+'%'}},title:{display:true,text:'% of Max Supply',color:'#555',font:{family:"'JetBrains Mono'",size:9}}},
     y:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9}},title:{display:true,text:ylabel,color:'#555',font:{family:"'JetBrains Mono'",size:9}}}
   }
 });
@@ -237,7 +237,7 @@ const ratioChart=new Chart(el('ratioChart'),{type:'line',data:{labels:[],dataset
   interaction:{mode:'index',intersect:false},
   plugins:{legend:{labels:{color:'#666',font:{family:"'JetBrains Mono'",size:10},boxWidth:12,padding:8}}},
   scales:{
-    x:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9},callback:v=>v+'%'}},
+    x:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9},maxTicksLimit:15,callback:function(val){return this.getLabelForValue(val)+'%'}}},
     y:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9}},title:{display:true,text:'MC/TVL',color:'#f59e0b',font:{family:"'JetBrains Mono'",size:9}},position:'left'},
     y1:{grid:{drawOnChartArea:false},ticks:{color:'#06b6d4',font:{family:"'JetBrains Mono'",size:9},callback:v=>v.toFixed(0)+'%'},title:{display:true,text:'FP/MP %',color:'#06b6d4',font:{family:"'JetBrains Mono'",size:9}},position:'right'}
   }
