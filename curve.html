@@ -179,12 +179,13 @@ function fmtP(v){if(v>=0.01)return v.toFixed(4);if(v>=0.0001)return v.toFixed(6)
 
 function getParams(){
   const n=parseInt(el('curveN').value);
-  const fp=parseFloat(el('fp').value)||0.00345;
-  const m=parseFloat(el('slopeM').value)||3.36e-16;
+  const fp=parseFloat(el('fp').value)||6.9e-5;
+  const m=parseFloat(el('slopeM').value)||4.28e-21;
   const monUSD=parseFloat(el('monPrice').value)||0.025;
   const buyFee=parseFloat(el('buyFee').value)||0.01;
   const sellFee=parseFloat(el('sellFee').value)||0.015;
-  return{n,fp,m,monUSD,buyFee,sellFee};
+  const totalSupply=1_000_000_000; // 1B total, MC = price × totalSupply
+  return{n,fp,m,monUSD,buyFee,sellFee,totalSupply};
 }
 
 function price(x,P){return P.fp+P.m*Math.pow(x,P.n)}
@@ -249,7 +250,7 @@ function update(){
     const t=tvl(x,P);
     const fs=P.fp*x;
     const ms=Math.max(0,t-fs);
-    const mc=p*x;
+    const mc=p*P.totalSupply; // MC = price × total 1B supply, not just traded
     prices.push(p);
     floors.push(P.fp);
     tvls.push(t);
@@ -284,7 +285,7 @@ function update(){
   const ct=tvl(cursor,P);
   const cfs=P.fp*cursor;
   const cms=Math.max(0,ct-cfs);
-  const cmc=cp*cursor;
+  const cmc=cp*P.totalSupply;
   const cRatio=ct>0?cmc/ct:0;
 
   el('dPrice').textContent=fmtP(cp)+' MON';
@@ -307,7 +308,7 @@ function update(){
     const t=tvl(s,P);
     const fs=P.fp*s;
     const ms=Math.max(0,t-fs);
-    const mc=p*s;
+    const mc=p*P.totalSupply;
     const ratio=t>0?mc/t:0;
     const avg=s>0?t/s:0;
     const buy100k=buyCostAt(s,100000,P);
