@@ -108,12 +108,8 @@ tr:hover{background:var(--card2)}
     <label>Sell Fee</label>
     <input type="number" id="sellFee" value="0.015" step="0.005">
   </div>
-  <div class="ctrl-group">
-    <label>Max Supply</label>
-    <input type="text" id="maxSupply" value="1000000000">
-  </div>
   <div class="ctrl-group" style="min-width:280px">
-    <label>Supply Cursor</label>
+    <label>Supply Position</label>
     <div class="slider-wrap">
       <input type="range" id="supplySlider" min="0" max="100" value="40" step="1">
       <span class="slider-val" id="supplyVal">40%</span>
@@ -198,7 +194,7 @@ function getParams(){
   const gradPrice=gradMC_MON/totalSupply;
   // Solve: fp + m × S^n = gradPrice → S = ((gradPrice - fp) / m)^(1/n)
   const gradSupply=(gradPrice>fp&&m>0)?Math.pow((gradPrice-fp)/m,1/n):0;
-  const gradPct=gradSupply>0?(gradSupply/(parseFloat(el('maxSupply').value)||1e9)*100):0;
+  const gradPct=gradSupply>0?100:0; // 100% of curve = graduation
   return{n,fp,m,monUSD,buyFee,sellFee,totalSupply,gradMC_USD,gradSupply,gradPct};
 }
 
@@ -210,7 +206,7 @@ function buyCostAt(sx,amt,P){const n1=P.n+1;return P.fp*amt+P.m*(Math.pow(sx+amt
 const chartOpts=(ylabel)=>({
   responsive:true,maintainAspectRatio:false,
   interaction:{mode:'index',intersect:false},
-  plugins:{legend:{labels:{color:'#666',font:{family:"'JetBrains Mono'",size:10},boxWidth:12,padding:8}},tooltip:{callbacks:{title:items=>{const pct=items[0].label;const maxS=parseFloat(document.getElementById('maxSupply').value)||1e9;return pct+'% = '+fmtN(maxS*parseFloat(pct)/100)+' tokens'},label:item=>{const v=item.raw;const label=item.dataset.label||'';return label+': '+fmtSubPlain(v)}}}},
+  plugins:{legend:{labels:{color:'#666',font:{family:"'JetBrains Mono'",size:10},boxWidth:12,padding:8}},tooltip:{callbacks:{title:items=>{const pct=items[0].label;const P=getParams();const maxS=P.gradSupply>0?P.gradSupply:793100000;return pct+'% = '+fmtN(maxS*parseFloat(pct)/100)+' tokens (of graduation)'},label:item=>{const v=item.raw;const label=item.dataset.label||'';return label+': '+fmtSubPlain(v)}}}},
   scales:{
     x:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9},maxTicksLimit:15,callback:function(val,idx){const l=this.getLabelForValue(val);return l+'%'}},title:{display:true,text:'% of Max Supply',color:'#555',font:{family:"'JetBrains Mono'",size:9}}},
     y:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9}},title:{display:true,text:ylabel,color:'#555',font:{family:"'JetBrains Mono'",size:9}}}
@@ -249,7 +245,7 @@ const ratioChart=new Chart(el('ratioChart'),{type:'line',data:{labels:[],dataset
 function update(){
   const P=getParams();
   const cursorPct=parseInt(el('supplySlider').value);
-  const maxS=parseFloat(el('maxSupply').value)||50000000;
+  const maxS=P.gradSupply>0?P.gradSupply:793100000; // 100% = graduation supply
   const cursor=maxS*cursorPct/100;
   el('supplyVal').textContent=cursorPct+'% ('+fmtN(cursor)+')';
 
@@ -346,12 +342,12 @@ function update(){
   el('dRatio').textContent=cRatio.toFixed(2)+'x';
 
   // Graduation info
-  el('dGrad').textContent=P.gradPct>0?P.gradPct.toFixed(1)+'%':'—';
-  el('dGradSub').textContent=P.gradSupply>0?fmtN(P.gradSupply)+' tokens | MC=$'+fmtN(P.gradMC_USD):'—';
+  el('dGrad').textContent=P.gradSupply>0?fmtN(P.gradSupply)+' tokens':'—';
+  el('dGradSub').textContent=P.gradSupply>0?'MC=$'+fmtN(P.gradMC_USD)+' | 100% of curve':'—';
 
-  // Table — percentage based
-  const pcts=[1,2,5,10,15,20,25,30,40,50,60,70,79.3,80,90,100];
-  const tableSupplies=pcts.map(p=>({pct:p,supply:Math.round(maxS*p/100)})).filter(r=>r.supply<=maxS);
+  // Table — percentage of graduation supply
+  const pcts=[1,2,5,10,15,20,25,30,40,50,60,70,80,90,100];
+  const tableSupplies=pcts.map(p=>({pct:p,supply:Math.round(maxS*p/100)}));
   let html='';
   for(const{pct,supply:s} of tableSupplies){
     const p=price(s,P);
@@ -396,7 +392,7 @@ el('curveN').addEventListener('change',()=>{
 });
 
 // Bind all inputs
-['curveN','fp','slopeM','monPrice','gradMC','buyFee','sellFee','supplySlider','maxSupply'].forEach(id=>{
+['curveN','fp','slopeM','monPrice','gradMC','buyFee','sellFee','supplySlider'].forEach(id=>{
   el(id).addEventListener('input',update);
 });
 
