@@ -744,9 +744,11 @@ function fmtInput(el){
 }
 function getInputVal(id){return parseFloat(document.getElementById(id).value.replace(/,/g,''))||0}
 function fmt(n){if(n==null)return'—';const a=Math.abs(n);if(a>=1e9)return(n/1e9).toFixed(2)+'B';if(a>=1e6)return(n/1e6).toFixed(2)+'M';if(a>=1e3)return(n/1e3).toFixed(1)+'K';return n.toFixed(2)}
-function fmtUSD(mon){const usd=mon*MON_USD;if(Math.abs(usd)>=1e6)return'$'+(usd/1e6).toFixed(2)+'M';if(Math.abs(usd)>=1e3)return'$'+(usd/1e3).toFixed(1)+'K';return'$'+usd.toFixed(2)}
+function fmtUSD(mon){const usd=mon*MON_USD;if(Math.abs(usd)>=1e6)return'$'+(usd/1e6).toFixed(2)+'M';if(Math.abs(usd)>=1e3)return'$'+(usd/1e3).toFixed(1)+'K';if(Math.abs(usd)<0.01&&usd!==0)return'$'+fmtSub(usd);return'$'+usd.toFixed(2)}
 function fmtDual(mon){return fmt(mon)+' <span style="color:var(--text2);font-size:9px">('+fmtUSD(mon)+')</span>'}
-function fmtP(n){return n<.001?n.toExponential(2):n<1?n.toFixed(4):n<1e3?n.toFixed(3):fmt(n)}
+function fmtSub(n){if(n===0)return'0';const a=Math.abs(n);if(a>=0.01)return n<1?n.toFixed(4):n<1e3?n.toFixed(3):fmt(n);const s=a.toExponential();const m=s.match(/^(\d+\.\d+)e[+-](\d+)$/);if(!m)return a.toExponential(2);const exp=parseInt(m[2]);const sig=parseFloat(m[1]).toFixed(2).replace(/\.?0+$/,'');const zeros=exp-1;return(n<0?'-':'')+'0.0<sub>'+zeros+'</sub>'+sig.replace('.','')}
+const subDigits='₀₁₂₃₄₅₆₇₈₉';function fmtSubPlain(n){if(n===0)return'0';const a=Math.abs(n);if(a>=0.01)return n<1?n.toFixed(4):n<1e3?n.toFixed(3):fmt(n);const s=a.toExponential();const m=s.match(/^(\d+\.\d+)e[+-](\d+)$/);if(!m)return a.toExponential(2);const exp=parseInt(m[2]);const sig=parseFloat(m[1]).toFixed(2).replace(/\.?0+$/,'');const zeros=exp-1;const sub=String(zeros).split('').map(d=>subDigits[parseInt(d)]).join('');return(n<0?'-':'')+'0.0'+sub+sig.replace('.','')}
+function fmtP(n){return fmtSub(n)}
 function fmtPDual(mon){return fmtP(mon)+' <span style="color:var(--text2);font-size:9px">('+fmtUSD(mon)+')</span>'}
 function updateUI(){
   const{total,floorSup,mktSup,mfr}=getLiq(),mp=price(S.supply,S.fp,S.m);

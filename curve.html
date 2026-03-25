@@ -179,8 +179,10 @@ tr:hover{background:var(--card2)}
 <script>
 const el=id=>document.getElementById(id);
 function fmtN(v){if(v>=1e9)return(v/1e9).toFixed(2)+'B';if(v>=1e6)return(v/1e6).toFixed(2)+'M';if(v>=1e3)return(v/1e3).toFixed(1)+'K';return v.toFixed(1)}
-function fmt$(v){if(Math.abs(v)>=1e6)return'$'+(v/1e6).toFixed(2)+'M';if(Math.abs(v)>=1e3)return'$'+(v/1e3).toFixed(1)+'K';if(Math.abs(v)>=1)return'$'+v.toFixed(2);if(Math.abs(v)>=0.001)return'$'+v.toFixed(4);return'$'+v.toExponential(2)}
-function fmtP(v){if(v>=0.01)return v.toFixed(4);if(v>=0.0001)return v.toFixed(6);return v.toExponential(3)}
+function fmtSub(n){if(n===0)return'0';const a=Math.abs(n);if(a>=0.01)return n<1?n.toFixed(4):n<1e3?n.toFixed(3):fmtN(n);const s=a.toExponential();const m=s.match(/^(\d+\.\d+)e[+-](\d+)$/);if(!m)return a.toExponential(2);const exp=parseInt(m[2]);const sig=parseFloat(m[1]).toFixed(2).replace(/\.?0+$/,'');const zeros=exp-1;return(n<0?'-':'')+'0.0<sub>'+zeros+'</sub>'+sig.replace('.','')}
+const subDigits='₀₁₂₃₄₅₆₇₈₉';function fmtSubPlain(n){if(n===0)return'0';const a=Math.abs(n);if(a>=0.01)return n<1?n.toFixed(4):n<1e3?n.toFixed(3):fmtN(n);const s=a.toExponential();const m=s.match(/^(\d+\.\d+)e[+-](\d+)$/);if(!m)return a.toExponential(2);const exp=parseInt(m[2]);const sig=parseFloat(m[1]).toFixed(2).replace(/\.?0+$/,'');const zeros=exp-1;const sub=String(zeros).split('').map(d=>subDigits[parseInt(d)]).join('');return(n<0?'-':'')+'0.0'+sub+sig.replace('.','')}
+function fmt$(v){if(Math.abs(v)>=1e6)return'$'+(v/1e6).toFixed(2)+'M';if(Math.abs(v)>=1e3)return'$'+(v/1e3).toFixed(1)+'K';if(Math.abs(v)>=1)return'$'+v.toFixed(2);if(Math.abs(v)<0.01&&v!==0)return'$'+fmtSub(v);return'$'+v.toFixed(4)}
+function fmtP(v){return fmtSub(v)}
 
 function getParams(){
   const n=parseInt(el('curveN').value);
@@ -208,7 +210,7 @@ function buyCostAt(sx,amt,P){const n1=P.n+1;return P.fp*amt+P.m*(Math.pow(sx+amt
 const chartOpts=(ylabel)=>({
   responsive:true,maintainAspectRatio:false,
   interaction:{mode:'index',intersect:false},
-  plugins:{legend:{labels:{color:'#666',font:{family:"'JetBrains Mono'",size:10},boxWidth:12,padding:8}},tooltip:{callbacks:{title:items=>{const pct=items[0].label;const maxS=parseFloat(document.getElementById('maxSupply').value)||1e9;return pct+'% = '+fmtN(maxS*parseFloat(pct)/100)+' tokens'},label:item=>{const v=item.raw;const label=item.dataset.label||'';if(v===0)return label+': 0';if(Math.abs(v)<0.001)return label+': '+v.toExponential(3);if(Math.abs(v)<1)return label+': '+v.toFixed(6);return label+': '+fmtN(v)}}}},
+  plugins:{legend:{labels:{color:'#666',font:{family:"'JetBrains Mono'",size:10},boxWidth:12,padding:8}},tooltip:{callbacks:{title:items=>{const pct=items[0].label;const maxS=parseFloat(document.getElementById('maxSupply').value)||1e9;return pct+'% = '+fmtN(maxS*parseFloat(pct)/100)+' tokens'},label:item=>{const v=item.raw;const label=item.dataset.label||'';return label+': '+fmtSubPlain(v)}}}},
   scales:{
     x:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9},maxTicksLimit:15,callback:function(val,idx){const l=this.getLabelForValue(val);return l+'%'}},title:{display:true,text:'% of Max Supply',color:'#555',font:{family:"'JetBrains Mono'",size:9}}},
     y:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9}},title:{display:true,text:ylabel,color:'#555',font:{family:"'JetBrains Mono'",size:9}}}
