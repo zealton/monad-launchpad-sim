@@ -331,9 +331,9 @@ function update() {
   // Update dashboard
   const tIdx = targetPct - 1;
   const pCost = pumpCosts[tIdx], oCost = ourCosts[tIdx];
-  el('dPumpCost').textContent = fmt$(pCost);
+  el('dPumpCost').innerHTML = fmt$(pCost);
   el('dPumpCostSol').textContent = (pCost / solUSD).toFixed(1) + ' SOL';
-  el('dOurCost').textContent = fmt$(oCost);
+  el('dOurCost').innerHTML = fmt$(oCost);
   el('dOurCostMon').textContent = fmtN(oCost / monUSD) + ' MON';
   const pTk = PUMP.realTokens * targetPct / 100;
   const oTk = params.realTokens * targetPct / 100;

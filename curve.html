@@ -302,14 +302,14 @@ function update(){
   const cmc=cp*P.totalSupply;
   const cRatio=ct>0?cmc/ct:0;
 
-  el('dPrice').textContent=fmtP(cp)+' MON';
-  el('dPriceUSD').textContent=fmt$(cp*P.monUSD);
-  el('dFloor').textContent=fmtP(P.fp)+' MON';
-  el('dFloorUSD').textContent=fmt$(P.fp*P.monUSD);
+  el('dPrice').innerHTML=fmtP(cp)+' MON';
+  el('dPriceUSD').innerHTML=fmt$(cp*P.monUSD);
+  el('dFloor').innerHTML=fmtP(P.fp)+' MON';
+  el('dFloorUSD').innerHTML=fmt$(P.fp*P.monUSD);
   el('dFPMP').textContent=(cp>0?(P.fp/cp*100).toFixed(1):0)+'%';
-  el('dMC').textContent=fmt$(cmc*P.monUSD);
+  el('dMC').innerHTML=fmt$(cmc*P.monUSD);
   el('dMCSub').textContent=fmtN(cmc)+' MON';
-  el('dTVL').textContent=fmt$(ct*P.monUSD);
+  el('dTVL').innerHTML=fmt$(ct*P.monUSD);
   el('dTVLSub').textContent=fmtN(ct)+' MON';
   el('dRatio').textContent=cRatio.toFixed(2)+'x';
 
