@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chip Control Cost — Bonding Curve Comparison</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+:root{--bg:#0c0c0c;--card:#141414;--card2:#1a1a1a;--border:#2a2a2a;--text:#d4d4d4;--text2:#666;--accent:#7c3aed;--cyan:#06b6d4;--green:#10b981;--red:#ef4444;--orange:#f59e0b;--pink:#ec4899;--mon:#a78bfa;--sol:#9945FF;--font:'JetBrains Mono',ui-monospace,'SF Mono','Cascadia Code',monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:12px}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+
+.header{padding:8px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--card)}
+.header h1{font-size:13px;font-weight:700;color:var(--green);letter-spacing:.02em}
+.header h1::before{content:'> ';color:var(--text2)}
+.tag{padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600;font-family:var(--font)}
+.tag-sol{background:var(--sol);color:#fff}.tag-mon{background:var(--mon);color:#000}
+
+.tabs{display:flex;gap:0;padding:0 16px;background:var(--card);border-bottom:1px solid var(--border)}
+.tab{padding:8px 16px;font-size:11px;font-weight:600;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;font-family:var(--font);transition:all .15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--green);border-bottom-color:var(--green)}
+.tab-link{margin-left:auto;color:var(--text2);text-decoration:none;font-size:10px;display:flex;align-items:center;gap:4px}
+.tab-link:hover{color:var(--cyan)}
+
+.container{max-width:1200px;margin:0 auto;padding:16px}
+
+/* Dashboard */
+.dash{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.dash-item{background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center}
+.dash-item .label{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.dash-item .val{font-size:16px;font-weight:700}
+.dash-item .sub{font-size:10px;color:var(--text2);margin-top:2px}
+
+/* Controls */
+.controls{background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:12px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.ctrl-group{display:flex;flex-direction:column;gap:3px}
+.ctrl-group label{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em}
+.ctrl-group input,.ctrl-group select{background:var(--bg);border:1px solid var(--border);color:var(--green);padding:5px 8px;border-radius:3px;font-size:11px;font-family:var(--font);width:120px}
+.ctrl-group select{width:140px;cursor:pointer}
+.slider-wrap{display:flex;align-items:center;gap:8px}
+.slider-wrap input[type=range]{flex:1;accent-color:var(--green);width:200px}
+.slider-val{font-size:13px;font-weight:700;color:var(--green);min-width:45px;text-align:right}
+
+/* Chart area */
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.chart-box{background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:12px}
+.chart-box h3{font-size:10px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
+.chart-wrap{height:280px;position:relative}
+
+/* Table */
+.table-box{background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:12px;margin-bottom:12px}
+.table-box h3{font-size:10px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
+table{width:100%;border-collapse:collapse;font-size:11px}
+thead th{text-align:right;padding:6px 8px;color:var(--text2);font-weight:500;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase}
+thead th:first-child{text-align:left}
+tbody td{text-align:right;padding:6px 8px;border-bottom:1px solid #1a1a1a}
+tbody td:first-child{text-align:left;color:var(--text)}
+tbody tr:hover{background:#1a1a1a}
+tbody tr.highlight{background:#10b98115}
+.col-pump{color:var(--sol)}.col-ours{color:var(--green)}
+.tag-sm{display:inline-block;padding:1px 4px;border-radius:2px;font-size:9px;font-weight:600}
+.tag-sm.cheap{background:#10b98130;color:var(--green)}.tag-sm.expensive{background:#ef444430;color:var(--red)}
+
+/* Responsive */
+@media(max-width:900px){.charts{grid-template-columns:1fr}.dash{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Chip Control Cost Analyzer</h1>
+  <span class="tag tag-sol">SOL</span>
+  <span class="tag tag-mon">MON</span>
+</div>
+<div class="tabs">
+  <a class="tab" href="index.html">Simulator</a>
+  <a class="tab active" href="chips.html">Chip Analysis</a>
+  <a class="tab" href="test.html">Tests</a>
+</div>
+
+<div class="container">
+
+<!-- Controls -->
+<div class="controls">
+  <div class="ctrl-group">
+    <label>Target % of Supply</label>
+    <div class="slider-wrap">
+      <input type="range" id="targetPct" min="1" max="100" value="90">
+      <span class="slider-val" id="targetPctVal">90%</span>
+    </div>
+  </div>
+  <div class="ctrl-group">
+    <label>SOL Price (USD)</label>
+    <input type="number" id="solPrice" value="130" step="1">
+  </div>
+  <div class="ctrl-group">
+    <label>MON Price (USD)</label>
+    <input type="number" id="monPrice" value="0.40" step="0.01">
+  </div>
+  <div class="ctrl-group">
+    <label>Our Curve Power (n)</label>
+    <select id="curveN">
+      <option value="1">n=1 (Linear, MC/TVL≈2x)</option>
+      <option value="2" selected>n=2 (Quadratic, MC/TVL≈3x)</option>
+      <option value="3">n=3 (Cubic, MC/TVL≈4x)</option>
+      <option value="4">n=4 (MC/TVL≈5x)</option>
+    </select>
+  </div>
+  <div class="ctrl-group">
+    <label>Our Floor Price (MON)</label>
+    <input type="number" id="ourFP" value="0.00345" step="0.0001">
+  </div>
+  <div class="ctrl-group">
+    <label>Our Graduation MC ($)</label>
+    <input type="number" id="ourGradMC" value="69000" step="1000">
+  </div>
+</div>
+
+<!-- Dashboard -->
+<div class="dash">
+  <div class="dash-item"><div class="label">Pump.fun Cost</div><div class="val col-pump" id="dPumpCost">—</div><div class="sub" id="dPumpCostSol">—</div></div>
+  <div class="dash-item"><div class="label">Our Cost</div><div class="val col-ours" id="dOurCost">—</div><div class="sub" id="dOurCostMon">—</div></div>
+  <div class="dash-item"><div class="label">Tokens Held</div><div class="val" id="dTokens">—</div><div class="sub" id="dTokensSub">—</div></div>
+  <div class="dash-item"><div class="label">Cost Ratio</div><div class="val" id="dRatio">—</div><div class="sub" id="dRatioSub">—</div></div>
+</div>
+
+<!-- Charts -->
+<div class="charts">
+  <div class="chart-box">
+    <h3>Cumulative Cost to Control X% Supply (USD)</h3>
+    <div class="chart-wrap"><canvas id="costChart"></canvas></div>
+  </div>
+  <div class="chart-box">
+    <h3>Marginal Price per Token (USD)</h3>
+    <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="table-box">
+  <h3>Chip Control Breakdown</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>% Supply</th>
+        <th>Pump.fun (SOL)</th>
+        <th>Pump.fun (USD)</th>
+        <th>Ours (MON)</th>
+        <th>Ours (USD)</th>
+        <th>Cheaper?</th>
+        <th>Price After (Pump)</th>
+        <th>Price After (Ours)</th>
+        <th>MC After (Pump)</th>
+        <th>MC After (Ours)</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+</div>
+
+<script>
+// ========== Pump.fun Model ==========
+const PUMP = {
+  totalSupply: 1_000_000_000,
+  realTokens: 793_100_000,
+  virtualSol: 30,
+  virtualToken: 1_073_000_191,
+  get k() { return this.virtualSol * this.virtualToken; }
+};
+
+function pumpCostToBuy(tokens) {
+  const newVT = PUMP.virtualToken - tokens;
+  if (newVT <= 0) return Infinity;
+  return PUMP.k / newVT - PUMP.virtualSol;
+}
+
+function pumpPriceAt(tokensBought) {
+  const vs = PUMP.virtualSol + pumpCostToBuy(tokensBought);
+  const vt = PUMP.virtualToken - tokensBought;
+  return vs / vt; // SOL per token
+}
+
+// ========== Our Model ==========
+function getOurParams() {
+  const n = parseInt(el('curveN').value);
+  const fp = parseFloat(el('ourFP').value) || 0.00345;
+  const gradMC = (parseFloat(el('ourGradMC').value) || 69000) / (parseFloat(el('monPrice').value) || 0.40);
+  // Calibrate: at graduation supply S_grad, MC = gradMC
+  // MC = (fp + m * S^n) * S = gradMC
+  // We need to pick S_grad. Use same as pump: ~793M tradeable? No, use 20M (our scale)
+  // Actually, let's back-calculate from pump.fun's graduation MC to match
+  // Pump graduation MC = 411 SOL ≈ $53K. Ours target = gradMC in MON.
+  // Let S_grad = 20M (our standard scale)
+  const S_grad = 20_000_000;
+  const targetPrice = gradMC / S_grad;
+  const m = (targetPrice - fp) / Math.pow(S_grad, n);
+  return { n, fp, m, S_grad, totalSupply: S_grad }; // all tradeable
+}
+
+function ourCostToBuy(tokens, params) {
+  const { fp, m, n } = params;
+  const n1 = n + 1;
+  return fp * tokens + m * (Math.pow(tokens, n1)) / n1;
+}
+
+function ourPriceAt(supply, params) {
+  return params.fp + params.m * Math.pow(supply, params.n);
+}
+
+// ========== UI ==========
+function el(id) { return document.getElementById(id); }
+function fmt$(v) { return v >= 1000 ? '$' + (v / 1000).toFixed(1) + 'K' : '$' + v.toFixed(0); }
+function fmtN(v) { return v >= 1e9 ? (v/1e9).toFixed(2)+'B' : v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(1)+'K' : v.toFixed(0); }
+
+// Charts
+const costCtx = el('costChart').getContext('2d');
+const priceCtx = el('priceChart').getContext('2d');
+
+const chartOpts = (ylabel) => ({
+  responsive: true, maintainAspectRatio: false,
+  interaction: { mode: 'index', intersect: false },
+  plugins: { legend: { labels: { color: '#666', font: { family: "'JetBrains Mono'", size: 10 }, boxWidth: 12, padding: 8 } } },
+  scales: {
+    x: { grid: { color: '#1a1a1a' }, ticks: { color: '#666', font: { family: "'JetBrains Mono'", size: 9 }, callback: v => v + '%' } },
+    y: { grid: { color: '#1a1a1a' }, ticks: { color: '#666', font: { family: "'JetBrains Mono'", size: 9 }, callback: v => fmt$(v) }, title: { display: true, text: ylabel, color: '#666', font: { family: "'JetBrains Mono'", size: 9 } } }
+  }
+});
+
+const costChart = new Chart(costCtx, {
+  type: 'line',
+  data: { labels: [], datasets: [
+    { label: 'Pump.fun', data: [], borderColor: '#9945FF', backgroundColor: '#9945FF20', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 },
+    { label: 'Ours', data: [], borderColor: '#10b981', backgroundColor: '#10b98120', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }
+  ]},
+  options: chartOpts('Cumulative Cost (USD)')
+});
+
+const priceChart = new Chart(priceCtx, {
+  type: 'line',
+  data: { labels: [], datasets: [
+    { label: 'Pump.fun', data: [], borderColor: '#9945FF', tension: 0.3, pointRadius: 0, borderWidth: 2 },
+    { label: 'Ours', data: [], borderColor: '#10b981', tension: 0.3, pointRadius: 0, borderWidth: 2 }
+  ]},
+  options: chartOpts('Token Price (USD)')
+});
+
+// Vertical line plugin
+const verticalLinePlugin = {
+  id: 'verticalLine',
+  afterDraw(chart) {
+    const targetPct = parseInt(el('targetPct').value);
+    const xScale = chart.scales.x;
+    const yScale = chart.scales.y;
+    const idx = targetPct - 1;
+    if (idx < 0 || idx >= xScale.ticks.length) return;
+    const x = xScale.getPixelForValue(idx);
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 1;
+    ctx.moveTo(x, yScale.top);
+    ctx.lineTo(x, yScale.bottom);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+Chart.register(verticalLinePlugin);
+
+function update() {
+  const solUSD = parseFloat(el('solPrice').value) || 130;
+  const monUSD = parseFloat(el('monPrice').value) || 0.40;
+  const targetPct = parseInt(el('targetPct').value);
+  el('targetPctVal').textContent = targetPct + '%';
+
+  const params = getOurParams();
+
+  const labels = [];
+  const pumpCosts = [], ourCosts = [], pumpPrices = [], ourPrices = [];
+  const tableRows = [];
+
+  for (let pct = 1; pct <= 100; pct++) {
+    labels.push(pct);
+
+    // Pump.fun
+    const pTokens = PUMP.realTokens * pct / 100;
+    const pCostSol = pumpCostToBuy(pTokens);
+    const pCostUSD = pCostSol * solUSD;
+    const pPriceUSD = pumpPriceAt(pTokens) * solUSD;
+
+    // Ours
+    const oTokens = params.totalSupply * pct / 100;
+    const oCostMon = ourCostToBuy(oTokens, params);
+    const oCostUSD = oCostMon * monUSD;
+    const oPriceUSD = ourPriceAt(oTokens, params) * monUSD;
+
+    pumpCosts.push(pCostUSD);
+    ourCosts.push(oCostUSD);
+    pumpPrices.push(pPriceUSD);
+    ourPrices.push(oPriceUSD);
+
+    // Table rows for key percentages
+    if ([1,5,10,20,30,40,50,60,70,80,90,95,100].includes(pct)) {
+      const pMCAfter = pumpPriceAt(pTokens) * PUMP.totalSupply * solUSD;
+      const oMCAfter = ourPriceAt(oTokens, params) * params.totalSupply * monUSD;
+      const cheaper = oCostUSD < pCostUSD;
+      tableRows.push({ pct, pCostSol, pCostUSD, oCostMon, oCostUSD, pPriceUSD, oPriceUSD, pMCAfter, oMCAfter, cheaper });
+    }
+  }
+
+  // Update charts
+  costChart.data.labels = labels;
+  costChart.data.datasets[0].data = pumpCosts;
+  costChart.data.datasets[1].data = ourCosts;
+  costChart.update();
+
+  priceChart.data.labels = labels;
+  priceChart.data.datasets[0].data = pumpPrices;
+  priceChart.data.datasets[1].data = ourPrices;
+  priceChart.update();
+
+  // Update dashboard
+  const tIdx = targetPct - 1;
+  const pCost = pumpCosts[tIdx], oCost = ourCosts[tIdx];
+  el('dPumpCost').textContent = fmt$(pCost);
+  el('dPumpCostSol').textContent = (pCost / solUSD).toFixed(1) + ' SOL';
+  el('dOurCost').textContent = fmt$(oCost);
+  el('dOurCostMon').textContent = fmtN(oCost / monUSD) + ' MON';
+  const pTk = PUMP.realTokens * targetPct / 100;
+  const oTk = params.totalSupply * targetPct / 100;
+  el('dTokens').textContent = targetPct + '% Supply';
+  el('dTokensSub').textContent = 'Pump: ' + fmtN(pTk) + ' | Ours: ' + fmtN(oTk);
+  const ratio = oCost / pCost;
+  el('dRatio').textContent = ratio.toFixed(2) + 'x';
+  el('dRatio').style.color = ratio > 1 ? 'var(--red)' : 'var(--green)';
+  el('dRatioSub').textContent = ratio > 1 ? 'Ours costs more' : 'Ours is cheaper';
+
+  // Update table
+  const tbody = el('tableBody');
+  tbody.innerHTML = '';
+  for (const r of tableRows) {
+    const hl = r.pct === targetPct ? ' class="highlight"' : '';
+    tbody.innerHTML += `<tr${hl}>
+      <td>${r.pct}%</td>
+      <td class="col-pump">${r.pCostSol.toFixed(1)}</td>
+      <td class="col-pump">${fmt$(r.pCostUSD)}</td>
+      <td class="col-ours">${fmtN(r.oCostMon)}</td>
+      <td class="col-ours">${fmt$(r.oCostUSD)}</td>
+      <td><span class="tag-sm ${r.cheaper ? 'cheap' : 'expensive'}">${r.cheaper ? 'OURS' : 'PUMP'}</span></td>
+      <td class="col-pump">$${r.pPriceUSD.toFixed(6)}</td>
+      <td class="col-ours">$${r.oPriceUSD.toFixed(6)}</td>
+      <td class="col-pump">${fmt$(r.pMCAfter)}</td>
+      <td class="col-ours">${fmt$(r.oMCAfter)}</td>
+    </tr>`;
+  }
+}
+
+// Bind events
+el('targetPct').addEventListener('input', update);
+['solPrice','monPrice','curveN','ourFP','ourGradMC'].forEach(id => {
+  el(id).addEventListener('change', update);
+  el(id).addEventListener('input', () => { clearTimeout(el(id)._t); el(id)._t = setTimeout(update, 300); });
+});
+
+update();
+</script>
+</body>
+</html>
