@@ -86,11 +86,11 @@ tr:hover{background:var(--card2)}
   </div>
   <div class="ctrl-group">
     <label>Floor Price (MON)</label>
-    <input type="number" id="fp" value="0.00345" step="0.001">
+    <input type="text" id="fp" value="6.9e-5">
   </div>
   <div class="ctrl-group">
     <label>Slope (m)</label>
-    <input type="text" id="slopeM" value="3.36e-16">
+    <input type="text" id="slopeM" value="4.28e-21">
   </div>
   <div class="ctrl-group">
     <label>MON Price ($)</label>
@@ -104,11 +104,15 @@ tr:hover{background:var(--card2)}
     <label>Sell Fee</label>
     <input type="number" id="sellFee" value="0.015" step="0.005">
   </div>
+  <div class="ctrl-group">
+    <label>Max Supply</label>
+    <input type="text" id="maxSupply" value="1000000000">
+  </div>
   <div class="ctrl-group" style="min-width:280px">
     <label>Supply Cursor</label>
     <div class="slider-wrap">
-      <input type="range" id="supplySlider" min="0" max="50000000" value="20000000" step="100000">
-      <span class="slider-val" id="supplyVal">20.0M</span>
+      <input type="range" id="supplySlider" min="0" max="100" value="40" step="1">
+      <span class="slider-val" id="supplyVal">40%</span>
     </div>
   </div>
 </div>
@@ -148,7 +152,7 @@ tr:hover{background:var(--card2)}
   <h3>Supply Breakdown Table</h3>
   <table>
     <thead><tr>
-      <th>Supply</th>
+      <th>% Supply</th>
       <th>Price (MON)</th>
       <th>Price ($)</th>
       <th>Avg Price ($)</th>
@@ -191,9 +195,9 @@ function buyCostAt(sx,amt,P){const n1=P.n+1;return P.fp*amt+P.m*(Math.pow(sx+amt
 const chartOpts=(ylabel)=>({
   responsive:true,maintainAspectRatio:false,
   interaction:{mode:'index',intersect:false},
-  plugins:{legend:{labels:{color:'#666',font:{family:"'JetBrains Mono'",size:10},boxWidth:12,padding:8}}},
+  plugins:{legend:{labels:{color:'#666',font:{family:"'JetBrains Mono'",size:10},boxWidth:12,padding:8}},tooltip:{callbacks:{title:items=>{const pct=items[0].label;const maxS=parseFloat(document.getElementById('maxSupply').value)||1e9;return pct+'% = '+fmtN(maxS*parseFloat(pct)/100)+' tokens'}}}},
   scales:{
-    x:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9},callback:v=>fmtN(v)},title:{display:true,text:'Supply',color:'#555',font:{family:"'JetBrains Mono'",size:9}}},
+    x:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9},callback:v=>v+'%'},title:{display:true,text:'% of Max Supply',color:'#555',font:{family:"'JetBrains Mono'",size:9}}},
     y:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9}},title:{display:true,text:ylabel,color:'#555',font:{family:"'JetBrains Mono'",size:9}}}
   }
 });
@@ -220,7 +224,7 @@ const ratioChart=new Chart(el('ratioChart'),{type:'line',data:{labels:[],dataset
   interaction:{mode:'index',intersect:false},
   plugins:{legend:{labels:{color:'#666',font:{family:"'JetBrains Mono'",size:10},boxWidth:12,padding:8}}},
   scales:{
-    x:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9},callback:v=>fmtN(v)}},
+    x:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9},callback:v=>v+'%'}},
     y:{grid:{color:'#1a1a1a'},ticks:{color:'#666',font:{family:"'JetBrains Mono'",size:9}},title:{display:true,text:'MC/TVL',color:'#f59e0b',font:{family:"'JetBrains Mono'",size:9}},position:'left'},
     y1:{grid:{drawOnChartArea:false},ticks:{color:'#06b6d4',font:{family:"'JetBrains Mono'",size:9},callback:v=>v.toFixed(0)+'%'},title:{display:true,text:'FP/MP %',color:'#06b6d4',font:{family:"'JetBrains Mono'",size:9}},position:'right'}
   }
@@ -228,17 +232,19 @@ const ratioChart=new Chart(el('ratioChart'),{type:'line',data:{labels:[],dataset
 
 function update(){
   const P=getParams();
-  const cursor=parseInt(el('supplySlider').value);
-  const maxS=parseInt(el('supplySlider').max);
-  el('supplyVal').textContent=fmtN(cursor);
+  const cursorPct=parseInt(el('supplySlider').value);
+  const maxS=parseFloat(el('maxSupply').value)||50000000;
+  const cursor=maxS*cursorPct/100;
+  el('supplyVal').textContent=cursorPct+'% ('+fmtN(cursor)+')';
 
-  // Generate data points
+  // Generate data points — labels are percentages
   const steps=200;
   const labels=[],prices=[],floors=[],tvls=[],floorSups=[],mktSups=[],mcTvls=[],fpMps=[];
 
   for(let i=0;i<=steps;i++){
+    const pct=100*i/steps;
     const x=maxS*i/steps;
-    labels.push(x);
+    labels.push(Math.round(pct*10)/10);
     const p=price(x,P);
     const t=tvl(x,P);
     const fs=P.fp*x;
@@ -292,11 +298,11 @@ function update(){
   el('dTVLSub').textContent=fmtN(ct)+' MON';
   el('dRatio').textContent=cRatio.toFixed(2)+'x';
 
-  // Table
-  const rows=[0.5,1,2,3,5,8,10,12,15,18,20,25,30,35,40,50];
-  const tableSupplies=rows.map(v=>v*1e6).filter(v=>v<=maxS);
+  // Table — percentage based
+  const pcts=[1,2,5,10,15,20,25,30,40,50,60,70,79.3,80,90,100];
+  const tableSupplies=pcts.map(p=>({pct:p,supply:Math.round(maxS*p/100)})).filter(r=>r.supply<=maxS);
   let html='';
-  for(const s of tableSupplies){
+  for(const{pct,supply:s} of tableSupplies){
     const p=price(s,P);
     const t=tvl(s,P);
     const fs=P.fp*s;
@@ -305,9 +311,9 @@ function update(){
     const ratio=t>0?mc/t:0;
     const avg=s>0?t/s:0;
     const buy100k=buyCostAt(s,100000,P);
-    const isHighlight=Math.abs(s-cursor)<500000;
+    const isHighlight=Math.abs(pct-cursorPct)<=2;
     html+=`<tr${isHighlight?' class="highlight"':''}>
-      <td>${fmtN(s)}</td>
+      <td>${pct}% (${fmtN(s)})</td>
       <td class="col-price">${fmtP(p)}</td>
       <td class="col-price">${fmt$(p*P.monUSD)}</td>
       <td>${fmt$(avg*P.monUSD)}</td>
@@ -324,16 +330,22 @@ function update(){
   el('tableBody').innerHTML=html;
 }
 
-// Auto-update slope when n changes
+// Auto-update slope when n changes — calibrated for 1B supply, grad MC=$69K
 el('curveN').addEventListener('change',()=>{
   const n=parseInt(el('curveN').value);
-  const defaultM=33.6*Math.pow(10,-(7*n+3));
-  el('slopeM').value=defaultM.toExponential(2);
+  const monUSD=parseFloat(el('monPrice').value)||0.025;
+  const gradMC=69000/monUSD;
+  const totalSupply=1e9, realTokens=793100000;
+  const gradPrice=gradMC/totalSupply;
+  const fp=gradPrice*0.025;
+  const m=(gradPrice-fp)/Math.pow(realTokens,n);
+  el('slopeM').value=m.toExponential(2);
+  el('fp').value=fp.toExponential(2);
   update();
 });
 
 // Bind all inputs
-['curveN','fp','slopeM','monPrice','buyFee','sellFee','supplySlider'].forEach(id=>{
+['curveN','fp','slopeM','monPrice','buyFee','sellFee','supplySlider','maxSupply'].forEach(id=>{
   el(id).addEventListener('input',update);
 });
 
